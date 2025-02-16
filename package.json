@@ -1,0 +1,98 @@
+{
+  "name": "vscode-ollama",
+  "displayName": "VSCode Ollama",
+  "description": "Ollama integration for VSCode",
+  "version": "0.0.1",
+  "publisher": "warm3snow",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-username/vscode-ollama"
+  },
+  "engines": {
+    "vscode": "^1.97.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "configuration": {
+      "title": "VSCode Ollama",
+      "properties": {
+        "vscode-ollama.baseUrl": {
+          "type": "string",
+          "default": "http://127.0.0.1:11434",
+          "description": "Enter the URL where Ollama is running."
+        },
+        "vscode-ollama.model": {
+          "type": "string",
+          "description": "Choose the Ollama model you want to use for your conversations.",
+          "default": "deepseek-r1:32b"
+        },
+        "vscode-ollama.maxTokens": {
+          "type": "number",
+          "default": 4096,
+          "description": "Maximum number of tokens for context and response."
+        },
+        "vscode-ollama.keepAlive": {
+          "type": "string",
+          "enum": ["1 minute", "5 minutes", "10 minutes", "30 minutes"],
+          "default": "5 minutes",
+          "description": "Choose how long Ollama should keep your model in memory before unloading."
+        },
+        "vscode-ollama.performanceMode": {
+          "type": "string",
+          "enum": ["Base (Default)", "Fast", "Ultra"],
+          "default": "Base (Default)",
+          "description": "Choose the performance mode for the Ollama model."
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "vscode-ollama.settings",
+        "title": "Open Settings",
+        "category": "Ollama",
+        "icon": "$(settings-gear)"
+      },
+      {
+        "command": "vscode-ollama.testConnection",
+        "title": "Test Server Connection",
+        "category": "Ollama",
+        "icon": "$(plug)"
+      },
+      {
+        "command": "vscode-ollama.refreshModels",
+        "title": "Refresh Models",
+        "category": "Ollama",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "vscode-ollama.openChat",
+        "title": "Open Chat",
+        "category": "Ollama",
+        "icon": "$(comment-discussion)"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile",
+    "test": "node ./out/test/runTest.js",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.97.0",
+    "@types/node": "^16.x.x",
+    "@typescript-eslint/eslint-plugin": "^5.x.x",
+    "@typescript-eslint/parser": "^5.x.x",
+    "eslint": "^8.x.x",
+    "typescript": "^4.x.x",
+    "@vscode/vsce": "^2.24.0"
+  }
+}
