@@ -243,17 +243,11 @@ export function getChatWebviewContent(config: any): string {
             let webSearchEnabled = false;
             let isGenerating = false;
 
-            // 恢复对话历史或显示欢迎消息
+            // 恢复对话历史
             const state = vscode.getState() || { messages: [] };
-            if (state.messages.length === 0) {
-                // 添加欢迎消息
-                const welcomeMessage = '[vscode-ollama]是一款基于本地Ollama服务的VS Code扩展，支持模型配置、联网查询等多种特性，欢迎关注GitHub仓库并点击Star支持开发者持续优化！\n GitHub地址：https://github.com/warm3snow/vscode-ollama';
-                appendMessage(welcomeMessage, false);
-            } else {
-                state.messages.forEach(msg => {
-                    appendMessage(msg.content, msg.isUser);
-                });
-            }
+            state.messages.forEach(msg => {
+                appendMessage(msg.content, msg.isUser);
+            });
 
             // 菜单按钮点击事件
             menuButton.onclick = (e) => {
