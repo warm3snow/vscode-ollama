@@ -99,20 +99,20 @@ VSCode Ollama 是一个强大的 Visual Studio Code 扩展，它将 Ollama 的�
 
 <p align="center">支持开发者</p>
 
-<div style="display: flex; justify-content: space-around; margin: 20px 0;">
-  <div style="text-align: center; margin: 0 40px;">
-    <img src="resources/wechat.jpg" alt="微信支付" width="240"/>
-    <br/>
-    <br/>
-    微信支付
-  </div>
-  <div style="text-align: center; margin: 0 40px;">
-    <img src="resources/alipay.jpg" alt="支付宝" width="240"/>
-    <br/>
-    <br/>
-    支付宝
-  </div>
-</div>
+<table>
+  <tr>
+    <td align="center">
+      <img src="resources/wechat.jpg" alt="微信支付" width="240"/>
+      <br/>
+      WeChat Pay
+    </td>
+    <td align="center">
+      <img src="resources/alipay.jpg" alt="支付宝" width="240"/>
+      <br/>
+      Alipay
+    </td>
+  </tr>
+</table>
 
 ### 🪙 加密货币
 
@@ -140,9 +140,8 @@ VSCode Ollama 是一个强大的 Visual Studio Code 扩展，它将 Ollama 的�
 
 </details>
 
+你的支持有助于维护和改进这个扩展程序！感谢你！ ❤️ 
 - ⭐ 在 [GitHub 仓库](https://github.com/warm3snow/vscode-ollama) 上给个星标
 - 📝 提交问题或反馈意见
 - 🚀 为代码库做贡献
 - 💬 分享给你的朋友们
-
-你的支持有助于维护和改进这个扩展程序！感谢你！ ❤️ 

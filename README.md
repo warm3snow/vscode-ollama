@@ -92,20 +92,20 @@ If you find this extension helpful, you can support the developer by:
 
 <p align="center">Support the developer</p>
 
-<div style="display: flex; justify-content: space-around; margin: 20px 0;">
-  <div style="text-align: center; margin: 0 40px;">
-    <img src="resources/wechat.jpg" alt="WeChat Pay" width="240"/>
-    <br/>
-    <br/>
-    WeChat Pay
-  </div>
-  <div style="text-align: center; margin: 0 40px;">
-    <img src="resources/alipay.jpg" alt="Alipay" width="240"/>
-    <br/>
-    <br/>
-    Alipay
-  </div>
-</div>
+<table>
+  <tr>
+    <td align="center">
+      <img src="resources/wechat.jpg" alt="WeChat Pay" width="240"/>
+      <br/>
+      WeChat Pay
+    </td>
+    <td align="center">
+      <img src="resources/alipay.jpg" alt="Alipay" width="240"/>
+      <br/>
+      Alipay
+    </td>
+  </tr>
+</table>
 
 ### 🪙 Cryptocurrency
 
@@ -133,9 +133,8 @@ If you find this extension helpful, you can support the developer by:
 
 </details>
 
+Your support helps maintain and improve this extension! Thank you! ❤️
 - ⭐ Star the [GitHub repository](https://github.com/warm3snow/vscode-ollama)
 - 📝 Submit issues or feedback
 - 🚀 Contribute to the codebase
 - 💬 Share with your friends
-
-Your support helps maintain and improve this extension! Thank you! ❤️
