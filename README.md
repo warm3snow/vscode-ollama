@@ -16,33 +16,35 @@
   </a>
 </p>
 
-VSCode Ollama 是一个强大的 Visual Studio Code 扩展，它将 Ollama 的本地 LLM 能力无缝集成到您的开发环境中。
+[English](README.md) | [中文](README_CN.md)
 
-## ✨ 特性
+VSCode Ollama is a powerful Visual Studio Code extension that seamlessly integrates Ollama's local LLM capabilities into your development environment.
 
-- 🤖 **本地 LLM 支持**
-  - 基于 Ollama 的本地模型运行
-  - 支持多种模型切换
-  - 低延迟响应
+## ✨ Features
 
-- 🔍 **联网搜索**
-  - 实时网络信息集成
-  - 智能搜索结果整合
-  - 准确的信息引用
+- 🤖 **Local LLM Support**
+  - Local model execution based on Ollama
+  - Multiple model switching support
+  - Low-latency responses
 
-- 💡 **智能对话**
-  - 流式响应输出
-  - 思考过程可视化
-  - 对话历史保存
+- 🔍 **Web Search** [Coming Soon]
+  - Real-time web information integration
+  - Smart search results synthesis
+  - Accurate information citation
 
-- ⚙️ **灵活配置**
-  - 自定义服务器地址
-  - 可调节性能模式
-  - 模型参数配置
+- 💡 **Intelligent Chat**
+  - Streaming response output
+  - Thought process visualization
+  - Chat history preservation
 
-## 🚀 快速开始
+- ⚙️ **Flexible Configuration**
+  - Custom server address
+  - Adjustable performance modes
+  - Model parameter configuration
 
-1. **安装 Ollama**
+## 🚀 Quick Start
+
+1. **Install Ollama**
    ```bash
    # macOS
    brew install ollama
@@ -51,67 +53,30 @@ VSCode Ollama 是一个强大的 Visual Studio Code 扩展，它将 Ollama 的�
    curl -fsSL https://ollama.com/install.sh | sh
    ```
 
-2. **安装扩展**
-   - 在 VS Code 中打开扩展市场
-   - 搜索 "VSCode Ollama"
-   - 点击安装
+2. **Install Extension**
+   - Open Extensions in VS Code
+   - Search for "VSCode Ollama"
+   - Click Install
 
-3. **配置扩展**
-   - 打开命令面板 (Ctrl+Shift+P / Cmd+Shift+P)
-   - 输入 "Ollama: Settings"
-   - 配置服务器地址和默认模型
+3. **Configure Extension**
+   - Open Command Palette (Ctrl+Shift+P / Cmd+Shift+P)
+   - Type "Ollama: Settings"
+   - Configure server address and default model
 
-4. **开始使用**
-   - 使用命令 "Ollama: Open Chat" 开始对话
-   - 在聊天界面选择模型
-   - 开启/关闭联网搜索
-   - 发送消息开始交互
+4. **Start Using**
+   - Use command "Ollama: Open Chat" to start conversation
+   - Select model in chat interface
+   - Toggle web search
+   - Send message to interact
 
-## 📝 使用说明
+## 📝 Usage
 
-### 命令列表
-- `Ollama: Open Chat` - 打开聊天界面
-- `Ollama: Settings` - 打开设置页面
-- `Ollama: Test Connection` - 测试服务器连接
+### Commands
+- `Ollama: Open Chat` - Open chat interface
+- `Ollama: Settings` - Open settings page
+- `Ollama: Test Connection` - Test server connection
 
-### 快捷键
-- `Shift + Enter` - 在聊天输入框中换行
-- `Enter` - 发送消息
-- `Esc` - 关闭当前面板
-
-### 配置项
-
-## Features
-
-- Configure and use Ollama models directly from VSCode
-- Customize model settings including max tokens and performance mode
-- Test connection to Ollama server
-- View current configuration
-
-## Requirements
-
-- VSCode 1.60.0 or higher
-- Ollama installed and running locally
-
-## Extension Settings
-
-This extension contributes the following settings:
-
-* `vscode-ollama.baseUrl`: Ollama server URL
-* `vscode-ollama.model`: Selected Ollama model
-* `vscode-ollama.maxTokens`: Maximum tokens for context and response
-* `vscode-ollama.keepAlive`: Model keep-alive duration
-* `vscode-ollama.performanceMode`: Performance mode selection
-
-## Commands
-
-* `Ollama: Open Settings`: Display current Ollama settings
-* `Ollama: Test Server Connection`: Test connection to Ollama server
-* `Ollama: Refresh Models`: Refresh available models list
-* `Ollama: Open Chat`: Open chat interface to interact with Ollama
-
-## Release Notes
-
-### 0.0.1
-
-Initial release of VSCode Ollama
+### Shortcuts
+- `Shift + Enter` - New line in chat input
+- `Enter` - Send message
+- `Esc` - Close current panel
