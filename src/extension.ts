@@ -190,16 +190,23 @@ export function activate(context: vscode.ExtensionContext) {
 				'ollamaChat',
 				'Ollama Chat',
 				vscode.ViewColumn.One,
-				{ enableScripts: true }
+				{
+					enableScripts: true,
+					retainContextWhenHidden: true
+				}
 			);
 
-			const config = getOllamaConfig();
-			panel.webview.html = getChatWebviewContent(config);
+			panel.webview.html = getChatWebviewContent(getOllamaConfig());
 
-			// Handle messages from the webview
+			// 处理来自 webview 的消息
 			panel.webview.onDidReceiveMessage(
 				async message => {
-					if (message.command === 'sendMessage') {
+					if (message.command === 'webviewReady') {
+						// 发送欢迎消息
+						panel.webview.postMessage({
+							command: 'welcomeMessage'
+						});
+					} else if (message.command === 'sendMessage') {
 						try {
 							// 重置消息状态
 							lastMessageDiv = false;

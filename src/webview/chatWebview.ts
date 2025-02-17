@@ -434,7 +434,41 @@ export function getChatWebviewContent(config: any): string {
                     }
                 } else if (message.command === 'receiveMessage') {
                     appendMessage(message.content, false);
+                } else if (message.command === 'welcomeMessage') {
+                    // 创建并添加欢迎消息
+                    const welcomeDiv = document.createElement('div');
+                    welcomeDiv.className = 'message assistant-message';
+                    welcomeDiv.innerHTML = \`
+                        <div style="
+                            background: var(--vscode-textLink-activeForeground);
+                            padding: 15px;
+                            border-radius: 8px;
+                            margin-bottom: 20px;
+                            animation: fadeIn 0.5s ease-in;
+                        ">
+                            <h2 style="margin: 0 0 10px 0; color: var(--vscode-button-foreground);">
+                                👋 Welcome to VSCode Ollama!
+                            </h2>
+                            <p style="margin: 0; color: var(--vscode-button-foreground);">
+                                <a href="https://github.com/warm3snow/vscode-ollama" style="color: var(--vscode-button-foreground);">
+                                [vscode-ollama] </a>是一款基于本地 Ollama 服务的 VS Code 扩展，支持模型配置、联网查询等多种特性。欢迎关注GitHub仓库并Star以支持开发者持续优化！
+                                <br><br>
+                                GitHub 仓库：<a href="https://github.com/warm3snow/vscode-ollama" style="color: var(--vscode-button-foreground);">
+                                    https://github.com/warm3snow/vscode-ollama
+                                </a>
+                            </p>
+                        </div>
+                    \`;
+                    chatContainer.appendChild(welcomeDiv);
+                    chatContainer.scrollTop = chatContainer.scrollHeight;
                 }
+            });
+
+            window.addEventListener('load', () => {
+                // 通知扩展 webview 已准备就绪
+                vscode.postMessage({
+                    command: 'webviewReady'
+                });
             });
         </script>
     </body>
