@@ -6,7 +6,7 @@
   "publisher": "your-publisher-name",
   "repository": {
     "type": "git",
-    "url": "https://github.com/your-username/vscode-ollama"
+    "url": "https://github.com/warm3snow/vscode-ollama"
   },
   "engines": {
     "vscode": "^1.97.0"
