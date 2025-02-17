@@ -109,27 +109,36 @@ If you find this extension helpful, you can support the developer by:
 
 ### 🪙 Cryptocurrency
 
-<details>
-<summary>Bitcoin</summary>
-
-- **Native Segwit**  
-  `bc1qskds324wteq5kfmxh63g624htzwd34gky0f0q5`
-  
-- **Taproot**  
-  `bc1pk0zud9csztjrkqew54v2nv7g3kq0xc2n80jatkmz9axkve4trfcqp0aksf`
-</details>
-
-<details>
-<summary>Ethereum</summary>
-
-`0xB0DA3bbC5e9f8C4b4A12d493A72c33dBDf1A9803`
-</details>
-
-<details>
-<summary>Solana</summary>
-
-`AMvPLymJm4TZZgvrYU7DCVn4uuzh6gfJiHWNK35gmUzd`
-</details>
+<table>
+  <tr>
+    <td>
+      <b>Bitcoin</b>
+    </td>
+    <td>
+      <b>Native Segwit</b><br/>
+      <code>bc1qskds324wteq5kfmxh63g624htzwd34gky0f0q5</code>
+      <br/><br/>
+      <b>Taproot</b><br/>
+      <code>bc1pk0zud9csztjrkqew54v2nv7g3kq0xc2n80jatkmz9axkve4trfcqp0aksf</code>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <b>Ethereum</b>
+    </td>
+    <td>
+      <code>0xB0DA3bbC5e9f8C4b4A12d493A72c33dBDf1A9803</code>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <b>Solana</b>
+    </td>
+    <td>
+      <code>AMvPLymJm4TZZgvrYU7DCVn4uuzh6gfJiHWNK35gmUzd</code>
+    </td>
+  </tr>
+</table>
 
 </details>
 

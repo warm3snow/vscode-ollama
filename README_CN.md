@@ -114,29 +114,38 @@ VSCode Ollama 是一个强大的 Visual Studio Code 扩展，它将 Ollama 的�
   </tr>
 </table>
 
-### 🪙 加密货币
+### 🪙 Cryptocurrency
 
-<details>
-<summary>比特币</summary>
-
-- **原生隔离见证（Native Segwit）**  
-  `bc1qskds324wteq5kfmxh63g624htzwd34gky0f0q5`
-  
-- **Taproot（默克尔化聚合签名 Taproot）**  
-  `bc1pk0zud9csztjrkqew54v2nv7g3kq0xc2n80jatkmz9axkve4trfcqp0aksf`
-</details>
-
-<details>
-<summary>以太坊</summary>
-
-`0xB0DA3bbC5e9f8C4b4A12d493A72c33dBDf1A9803`
-</details>
-
-<details>
-<summary>索拉纳（Solana）</summary>
-
-`AMvPLymJm4TZZgvrYU7DCVn4uuzh6gfJiHWNK35gmUzd`
-</details>
+<table>
+  <tr>
+    <td>
+      <b>Bitcoin</b>
+    </td>
+    <td>
+      <b>Native Segwit</b><br/>
+      <code>bc1qskds324wteq5kfmxh63g624htzwd34gky0f0q5</code>
+      <br/><br/>
+      <b>Taproot</b><br/>
+      <code>bc1pk0zud9csztjrkqew54v2nv7g3kq0xc2n80jatkmz9axkve4trfcqp0aksf</code>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <b>Ethereum</b>
+    </td>
+    <td>
+      <code>0xB0DA3bbC5e9f8C4b4A12d493A72c33dBDf1A9803</code>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <b>Solana</b>
+    </td>
+    <td>
+      <code>AMvPLymJm4TZZgvrYU7DCVn4uuzh6gfJiHWNK35gmUzd</code>
+    </td>
+  </tr>
+</table>
 
 </details>
 
