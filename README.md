@@ -6,13 +6,16 @@
 
 <p align="center">
   <a href="https://marketplace.visualstudio.com/items?itemName=warm3snow.vscode-ollama">
-    <img src="https://img.shields.io/visual-studio-marketplace/v/warm3snow.vscode-ollama.svg?color=blue&label=VS%20Code%20Marketplace&logo=visual-studio-code" alt="Visual Studio Marketplace Version">
-    </a>
-    <a href="https://marketplace.visualstudio.com/items?itemName=warm3snow.vscode-ollama">
-    <img src="https://img.shields.io/visual-studio-marketplace/d/warm3snow.vscode-ollama.svg?color=blue&label=Downloads&logo=visual-studio-code" alt="Visual Studio Marketplace Downloads">
+    <img src="https://vsmarketplacebadge.apphb.com/version/warm3snow.vscode-ollama.svg" alt="VS Code Marketplace Version"/>
   </a>
-  <a href="https://github.com/warm3snow/vscode-ollama/blob/master/LICENSE">
-    <img src="https://img.shields.io/github/license/warm3snow/vscode-ollama.svg?color=blue&label=License&logo=github" alt="License">
+  <a href="https://marketplace.visualstudio.com/items?itemName=warm3snow.vscode-ollama">
+    <img src="https://vsmarketplacebadge.apphb.com/downloads-short/warm3snow.vscode-ollama.svg" alt="Downloads"/>
+  </a>
+  <a href="https://github.com/warm3snow/vscode-ollama/blob/main/LICENSE">
+    <img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"/>
+  </a>
+  <a href="https://github.com/warm3snow/vscode-ollama/stargazers">
+    <img src="https://img.shields.io/github/stars/warm3snow/vscode-ollama.svg?style=social" alt="GitHub stars"/>
   </a>
 </p>
 
@@ -80,3 +83,24 @@ VSCode Ollama is a powerful Visual Studio Code extension that seamlessly integra
 - `Shift + Enter` - New line in chat input
 - `Enter` - Send message
 - `Esc` - Close current panel
+
+## 📝 Changelog
+
+### 1.0.0 (2024-02-17)
+
+#### ✨ Features
+- Initial release
+- Local LLM support with Ollama integration
+- Web search capability
+- Streaming chat interface
+- Multiple model support
+- Customizable settings
+- Thought process visualization
+- Chat history preservation
+
+#### 🔧 Configuration
+- Custom server address
+- Model selection
+- Performance mode settings
+- Token limit configuration
+- Keep-alive duration settings

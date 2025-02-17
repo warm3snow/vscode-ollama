@@ -5,14 +5,17 @@
 </p>
 
 <p align="center">
-  <a href="https://marketplace.visualstudio.com/items?itemName=vscode-ollama">
-    <img src="https://img.shields.io/visual-studio-marketplace/v/vscode-ollama.svg?color=blue&label=VS%20Code%20商店&logo=visual-studio-code" alt="Visual Studio Marketplace Version">
+  <a href="https://marketplace.visualstudio.com/items?itemName=warm3snow.vscode-ollama">
+    <img src="https://vsmarketplacebadge.apphb.com/version/warm3snow.vscode-ollama.svg" alt="VS Code 商店版本"/>
   </a>
-  <a href="https://marketplace.visualstudio.com/items?itemName=vscode-ollama">
-    <img src="https://img.shields.io/visual-studio-marketplace/d/vscode-ollama.svg?color=blue&label=下载量&logo=visual-studio-code" alt="Visual Studio Marketplace Downloads">
+  <a href="https://marketplace.visualstudio.com/items?itemName=warm3snow.vscode-ollama">
+    <img src="https://vsmarketplacebadge.apphb.com/downloads-short/warm3snow.vscode-ollama.svg" alt="下载量"/>
   </a>
-  <a href="https://github.com/warm3snow/vscode-ollama/blob/master/LICENSE">
-    <img src="https://img.shields.io/github/license/warm3snow/vscode-ollama.svg?color=blue&label=许可证&logo=github" alt="License">
+  <a href="https://github.com/warm3snow/vscode-ollama/blob/main/LICENSE">
+    <img src="https://img.shields.io/badge/许可证-MIT-blue.svg" alt="许可证: MIT"/>
+  </a>
+  <a href="https://github.com/warm3snow/vscode-ollama/stargazers">
+    <img src="https://img.shields.io/github/stars/warm3snow/vscode-ollama.svg?style=social" alt="GitHub stars"/>
   </a>
 </p>
 
@@ -87,4 +90,25 @@ VSCode Ollama 是一个强大的 Visual Studio Code 扩展，它将 Ollama 的�
 - `ollama.maxTokens` - 最大令牌数
 - `ollama.keepAlive` - 保持连接时间
 - `ollama.performanceMode` - 性能模式
+
+## 📝 更新日志
+
+### 1.0.0 (2024-02-17)
+
+#### ✨ 新特性
+- 首次发布
+- 基于 Ollama 的本地 LLM 支持
+- 网络搜索功能
+- 流式对话界面
+- 多模型支持
+- 可自定义设置
+- 思考过程可视化
+- 对话历史保存
+
+#### 🔧 配置项
+- 自定义服务器地址
+- 模型选择
+- 性能模式设置
+- Token 限制配置
+- 保活时间设置
 
