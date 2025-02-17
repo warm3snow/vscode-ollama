@@ -112,3 +112,59 @@ VSCode Ollama 是一个强大的 Visual Studio Code 扩展，它将 Ollama 的�
 - Token 限制配置
 - 保活时间设置
 
+## ❤️ 支持与捐赠
+
+如果你觉得这个扩展程序很有用，你可以通过以下方式支持开发者：
+
+<details>
+<summary>💰 捐赠方式</summary>
+
+<p align="center">支持开发者</p>
+
+<div style="display: flex; justify-content: space-around; margin: 20px 0;">
+  <div style="text-align: center; margin: 0 40px;">
+    <img src="resources/wechat.jpg" alt="微信支付" width="240"/>
+    <br/>
+    <br/>
+    微信支付
+  </div>
+  <div style="text-align: center; margin: 0 40px;">
+    <img src="resources/alipay.jpg" alt="支付宝" width="240"/>
+    <br/>
+    <br/>
+    支付宝
+  </div>
+</div>
+
+### 🪙 加密货币
+
+<details>
+<summary>比特币</summary>
+
+- **原生隔离见证（Native Segwit）**  
+  `bc1qskds324wteq5kfmxh63g624htzwd34gky0f0q5`
+  
+- **Taproot（默克尔化聚合签名 Taproot）**  
+  `bc1pk0zud9csztjrkqew54v2nv7g3kq0xc2n80jatkmz9axkve4trfcqp0aksf`
+</details>
+
+<details>
+<summary>以太坊</summary>
+
+`0xB0DA3bbC5e9f8C4b4A12d493A72c33dBDf1A9803`
+</details>
+
+<details>
+<summary>索拉纳（Solana）</summary>
+
+`AMvPLymJm4TZZgvrYU7DCVn4uuzh6gfJiHWNK35gmUzd`
+</details>
+
+</details>
+
+- ⭐ 在 [GitHub 仓库](https://github.com/warm3snow/vscode-ollama) 上给个星标
+- 📝 提交问题或反馈意见
+- 🚀 为代码库做贡献
+- 💬 分享给你的朋友们
+
+你的支持有助于维护和改进这个扩展程序！感谢你！ ❤️ 
