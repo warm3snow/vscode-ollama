@@ -1,18 +1,27 @@
 {
   "name": "vscode-ollama",
   "displayName": "VSCode Ollama",
-  "description": "Ollama integration for VSCode",
+  "description": "VSCode Ollama is a powerful Visual Studio Code extension that seamlessly integrates Ollama's local LLM capabilities into your development environment.",
   "version": "1.0.0",
   "publisher": "warm3snow",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/your-username/vscode-ollama"
+  "author": {
+    "name": "warm3snow"
   },
+  "license": "MIT",
+  "icon": "resources/logo.png",
   "engines": {
     "vscode": "^1.60.0"
   },
   "categories": [
+    "Machine Learning",
     "Other"
+  ],
+  "keywords": [
+    "ollama",
+    "llm",
+    "ai",
+    "chat",
+    "local"
   ],
   "activationEvents": [
     "onStartupFinished"
@@ -21,62 +30,69 @@
   "contributes": {
     "commands": [
       {
-        "command": "vscode-ollama.settings",
-        "title": "Ollama: Settings",
-        "category": "Ollama"
+        "command": "vscode-ollama.openChat",
+        "title": "Ollama: Open Chat"
       },
       {
-        "command": "vscode-ollama.openChat",
-        "title": "Ollama: Open Chat",
-        "category": "Ollama"
+        "command": "vscode-ollama.settings",
+        "title": "Ollama: Settings"
       },
       {
         "command": "vscode-ollama.testConnection",
-        "title": "Ollama: Test Connection",
-        "category": "Ollama"
+        "title": "Ollama: Test Connection"
       }
     ],
     "configuration": {
-      "title": "Ollama",
+      "title": "VSCode Ollama",
       "properties": {
         "vscode-ollama.baseUrl": {
           "type": "string",
           "default": "http://127.0.0.1:11434",
-          "description": "Ollama server URL"
+          "description": "Ollama server base URL"
         },
         "vscode-ollama.model": {
           "type": "string",
           "default": "deepseek-r1:32b",
-          "description": "Default Ollama model"
+          "description": "Default model to use"
         },
         "vscode-ollama.maxTokens": {
           "type": "number",
           "default": 4096,
-          "description": "Maximum tokens for context and response"
+          "description": "Maximum tokens for response"
         },
         "vscode-ollama.keepAlive": {
           "type": "string",
-          "enum": ["1 minute", "5 minutes", "10 minutes", "30 minutes"],
           "default": "5 minutes",
-          "description": "Model keep-alive duration"
+          "description": "Keep-alive duration"
         },
         "vscode-ollama.performanceMode": {
           "type": "string",
-          "enum": ["Base (Default)", "Fast", "Ultra"],
           "default": "Base (Default)",
-          "description": "Performance mode"
+          "enum": [
+            "Base (Default)",
+            "Performance",
+            "Low Latency"
+          ],
+          "description": "Performance mode setting"
         }
       }
     }
   },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/warm3snow/vscode-ollama"
+  },
+  "bugs": {
+    "url": "https://github.com/warm3snow/vscode-ollama/issues"
+  },
+  "homepage": "https://github.com/warm3snow/vscode-ollama#readme",
   "scripts": {
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
-    "pretest": "npm run compile",
-    "test": "node ./out/test/runTest.js",
-    "package": "vsce package",
-    "install-deps": "npm install"
+    "pretest": "npm run compile && npm run lint",
+    "lint": "eslint src --ext ts",
+    "test": "node ./out/test/runTest.js"
   },
   "devDependencies": {
     "@types/mocha": "^9.1.1",
