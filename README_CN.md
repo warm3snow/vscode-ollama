@@ -82,7 +82,6 @@ VSCode Ollama 是一个强大的 Visual Studio Code 扩展，它将 Ollama 的�
 ### 快捷键
 - `Shift + Enter` - 在聊天输入框中换行
 - `Enter` - 发送消息
-- `Esc` - 关闭当前面板
 
 ### 配置项
 - `ollama.baseUrl` - 服务器地址
@@ -90,27 +89,6 @@ VSCode Ollama 是一个强大的 Visual Studio Code 扩展，它将 Ollama 的�
 - `ollama.maxTokens` - 最大令牌数
 - `ollama.keepAlive` - 保持连接时间
 - `ollama.performanceMode` - 性能模式
-
-## 📝 更新日志
-
-### 1.0.0 (2025-02-17)
-
-#### ✨ 新特性
-- 首次发布
-- 基于 Ollama 的本地 LLM 支持
-- 网络搜索功能
-- 流式对话界面
-- 多模型支持
-- 可自定义设置
-- 思考过程可视化
-- 对话历史保存
-
-#### 🔧 配置项
-- 自定义服务器地址
-- 模型选择
-- 性能模式设置
-- Token 限制配置
-- 保活时间设置
 
 ## ❤️ 支持与捐赠
 

@@ -82,28 +82,6 @@ VSCode Ollama is a powerful Visual Studio Code extension that seamlessly integra
 ### Shortcuts
 - `Shift + Enter` - New line in chat input
 - `Enter` - Send message
-- `Esc` - Close current panel
-
-## 📝 Changelog
-
-### 1.0.0 (2025-02-17)
-
-#### ✨ Features
-- Initial release
-- Local LLM support with Ollama integration
-- Web search capability
-- Streaming chat interface
-- Multiple model support
-- Customizable settings
-- Thought process visualization
-- Chat history preservation
-
-#### 🔧 Configuration
-- Custom server address
-- Model selection
-- Performance mode settings
-- Token limit configuration
-- Keep-alive duration settings
 
 ## ❤️ Support & Donation
 
