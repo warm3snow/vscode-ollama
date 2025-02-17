@@ -6,16 +6,16 @@
 
 <p align="center">
   <a href="https://marketplace.visualstudio.com/items?itemName=warm3snow.vscode-ollama">
-    <img src="https://vsmarketplacebadge.apphb.com/version/warm3snow.vscode-ollama.svg" alt="VS Code 商店版本"/>
+    <img src="https://img.shields.io/visual-studio-marketplace/i/warm3snow.vscode-ollama?logo=visual-studio-code" alt="安装量"/>
   </a>
   <a href="https://marketplace.visualstudio.com/items?itemName=warm3snow.vscode-ollama">
-    <img src="https://vsmarketplacebadge.apphb.com/downloads-short/warm3snow.vscode-ollama.svg" alt="下载量"/>
+    <img src="https://img.shields.io/visual-studio-marketplace/r/warm3snow.vscode-ollama?logo=visual-studio-code" alt="评分"/>
+  </a>
+  <a href="https://github.com/warm3snow/vscode-ollama">
+    <img src="https://img.shields.io/github/stars/warm3snow/vscode-ollama?style=social" alt="GitHub stars"/>
   </a>
   <a href="https://github.com/warm3snow/vscode-ollama/blob/main/LICENSE">
-    <img src="https://img.shields.io/badge/许可证-MIT-blue.svg" alt="许可证: MIT"/>
-  </a>
-  <a href="https://github.com/warm3snow/vscode-ollama/stargazers">
-    <img src="https://img.shields.io/github/stars/warm3snow/vscode-ollama.svg?style=social" alt="GitHub stars"/>
+    <img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="许可证: MIT"/>
   </a>
 </p>
 
