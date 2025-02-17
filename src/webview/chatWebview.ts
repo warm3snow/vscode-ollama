@@ -162,18 +162,72 @@ export function getChatWebviewContent(config: any): string {
                 background: var(--vscode-errorForeground) !important;
                 opacity: 0.8;
             }
+
+            .menu-button {
+                position: absolute;
+                top: 10px;
+                right: 10px;
+                padding: 4px 8px;
+                background: transparent;
+                border: none;
+                cursor: pointer;
+                font-size: 16px;
+                min-width: auto;
+                color: var(--vscode-foreground);
+                opacity: 0.6;
+            }
+            
+            .menu-button:hover {
+                opacity: 1;
+                background: transparent;
+                transform: none;
+            }
+            
+            .menu {
+                position: absolute;
+                top: 40px;
+                right: 10px;
+                background: var(--vscode-dropdown-background);
+                border: 1px solid var(--vscode-dropdown-border);
+                border-radius: 4px;
+                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+                display: none;
+                z-index: 1000;
+            }
+            
+            .menu.show {
+                display: block;
+            }
+            
+            .menu-item {
+                padding: 8px 16px;
+                cursor: pointer;
+                color: var(--vscode-foreground);
+                font-size: 13px;
+                white-space: nowrap;
+            }
+            
+            .menu-item:hover {
+                background: var(--vscode-list-hoverBackground);
+            }
         </style>
     </head>
     <body>
         <div id="chat-container"></div>
+        <button class="menu-button" id="menu-button">⋮</button>
+        <div class="menu" id="menu">
+            <div class="menu-item" id="clear-chat">清除对话</div>
+        </div>
         <div class="input-wrapper">
             <button id="web-search">
                 <span>联网搜索</span>
                 <span class="status">●</span>
             </button>
             <div id="input-container">
-                <input type="text" id="message-input" placeholder="有问题，尽管问，shift+enter换行" />
-                <button id="send-button" onclick="handleSendClick()">Send</button>
+                <textarea id="message-input" 
+                    placeholder="有问题，尽管问，shift+enter换行" 
+                    rows="1"></textarea>
+                <button id="send-button">Send</button>
             </div>
         </div>
 
@@ -183,18 +237,41 @@ export function getChatWebviewContent(config: any): string {
             const messageInput = document.getElementById('message-input');
             const webSearchButton = document.getElementById('web-search');
             const sendButton = document.getElementById('send-button');
+            const menuButton = document.getElementById('menu-button');
+            const menu = document.getElementById('menu');
+            const clearChatButton = document.getElementById('clear-chat');
             let webSearchEnabled = false;
             let isGenerating = false;
 
-            function updateSendButton(generating) {
-                isGenerating = generating;
-                sendButton.textContent = generating ? 'Stop' : 'Send';
-                sendButton.classList.toggle('sending', generating);
-            }
+            // 恢复对话历史
+            const state = vscode.getState() || { messages: [] };
+            state.messages.forEach(msg => {
+                appendMessage(msg.content, msg.isUser);
+            });
 
-            function handleSendClick() {
+            // 菜单按钮点击事件
+            menuButton.onclick = (e) => {
+                e.stopPropagation();
+                menu.classList.toggle('show');
+            };
+
+            // 点击菜单外区域关闭菜单
+            document.addEventListener('click', (e) => {
+                if (!menu.contains(e.target) && e.target !== menuButton) {
+                    menu.classList.remove('show');
+                }
+            });
+
+            // 清除对话按钮点击事件
+            clearChatButton.onclick = () => {
+                chatContainer.innerHTML = '';
+                vscode.setState({ messages: [] });
+                menu.classList.remove('show');
+            };
+
+            // 发送按钮点击事件
+            sendButton.onclick = () => {
                 if (isGenerating) {
-                    // 发送停止命令
                     vscode.postMessage({
                         command: 'stopGeneration'
                     });
@@ -202,6 +279,63 @@ export function getChatWebviewContent(config: any): string {
                 } else {
                     sendMessage();
                 }
+            };
+
+            // 联网搜索按钮点击事件
+            webSearchButton.onclick = () => {
+                webSearchEnabled = !webSearchEnabled;
+                webSearchButton.classList.toggle('active', webSearchEnabled);
+                const status = webSearchButton.querySelector('.status');
+                if (status) {
+                    status.style.color = webSearchEnabled ? '#4CAF50' : '#666';
+                }
+            };
+
+            // 输入框事件处理
+            messageInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    if (e.shiftKey) {
+                        return; // Shift+Enter 换行
+                    }
+                    e.preventDefault();
+                    if (!isGenerating) {
+                        sendMessage();
+                    } else {
+                        vscode.postMessage({
+                            command: 'stopGeneration'
+                        });
+                        updateSendButton(false);
+                    }
+                }
+            });
+
+            // 输入框自动调整高度
+            messageInput.addEventListener('input', function() {
+                this.style.height = 'auto';
+                const newHeight = Math.min(this.scrollHeight, 200);
+                this.style.height = newHeight + 'px';
+            });
+
+            function updateSendButton(generating) {
+                isGenerating = generating;
+                sendButton.textContent = generating ? 'Stop' : 'Send';
+                sendButton.classList.toggle('sending', generating);
+            }
+
+            function sendMessage() {
+                const content = messageInput.value.trim();
+                if (!content) return;
+
+                appendMessage(content, true);
+                messageInput.value = '';
+                messageInput.style.height = 'auto';
+                updateSendButton(true);
+
+                vscode.postMessage({
+                    command: 'sendMessage',
+                    content,
+                    webSearch: webSearchEnabled
+                });
             }
 
             function processThinkTags(content) {
@@ -253,58 +387,12 @@ export function getChatWebviewContent(config: any): string {
                 
                 chatContainer.appendChild(messageDiv);
                 chatContainer.scrollTop = chatContainer.scrollHeight;
+
+                // 保存消息到状态
+                const state = vscode.getState() || { messages: [] };
+                state.messages.push({ content, isUser });
+                vscode.setState(state);
             }
-
-            function formatMessage(content: string): string {
-                // 处理代码块
-                content = content.replace(/```([\s\S]*?)```/g, (match, code) => {
-                    return `<pre class="code-block"><code>${code}</code></pre>`;
-                });
-
-                // 处理行内代码
-                content = content.replace(/`([^`]+)`/g, '<code>$1</code>');
-
-                // 处理换行和段落
-                content = content
-                    // 将连续的多个换行替换为两个换行（形成段落）
-                    .replace(/\n{3,}/g, '\n\n')
-                    // 将单个换行替换为 <br>
-                    .replace(/\n/g, '<br>')
-                    // 将段落（两个换行）替换为段落标签
-                    .replace(/<br><br>/g, '</p><p>');
-
-                // 包装在段落标签中
-                return `<p>${content}</p>`;
-            }
-
-            async function sendMessage() {
-                const content = messageInput.value.trim();
-                if (!content) return;
-
-                appendMessage(content, true);
-                messageInput.value = '';
-                updateSendButton(true);
-
-                vscode.postMessage({
-                    command: 'sendMessage',
-                    content,
-                    webSearch: webSearchEnabled
-                });
-            }
-
-            messageInput.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    if (!isGenerating) {
-                        sendMessage();
-                    } else {
-                        vscode.postMessage({
-                            command: 'stopGeneration'
-                        });
-                        updateSendButton(false);
-                    }
-                }
-            });
 
             window.addEventListener('message', event => {
                 const message = event.data;
@@ -317,12 +405,6 @@ export function getChatWebviewContent(config: any): string {
                 } else if (message.command === 'streamMessage') {
                     if (!message.done) {
                         if (message.newMessage) {
-                            // 清除任何可能存在的流式消息
-                            const streamingMessages = document.querySelectorAll('.message.assistant-message.streaming');
-                            streamingMessages.forEach(msg => {
-                                msg.classList.remove('streaming');
-                            });
-                            
                             // 创建新的消息 div
                             const messageDiv = document.createElement('div');
                             messageDiv.className = 'message assistant-message streaming';
@@ -331,15 +413,21 @@ export function getChatWebviewContent(config: any): string {
                         
                         const streamingDiv = document.querySelector('.message.assistant-message.streaming');
                         if (streamingDiv) {
-                            const formattedContent = formatMessage(
-                                processThinkTags((streamingDiv.textContent || '') + message.content)
+                            streamingDiv.innerHTML = processThinkTags(
+                                (streamingDiv.textContent || '') + message.content
                             );
-                            streamingDiv.innerHTML = formattedContent;
                         }
                     } else {
                         const streamingDiv = document.querySelector('.message.assistant-message.streaming');
                         if (streamingDiv) {
                             streamingDiv.classList.remove('streaming');
+                            // 保存完成的消息到状态
+                            const state = vscode.getState() || { messages: [] };
+                            state.messages.push({ 
+                                content: streamingDiv.innerHTML, 
+                                isUser: false 
+                            });
+                            vscode.setState(state);
                         }
                         chatContainer.scrollTop = chatContainer.scrollHeight;
                         updateSendButton(false);
