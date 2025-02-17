@@ -16,4 +16,15 @@ export interface OllamaModel {
 
 export interface OllamaModelsResponse {
   models: OllamaModel[];
+}
+
+export interface SearchResult {
+    title: string;
+    url: string;
+    snippet: string;
+}
+
+export interface WebSearchResponse {
+    query: string;
+    results: SearchResult[];
 } 

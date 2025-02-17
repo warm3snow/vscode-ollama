@@ -1,6 +1,5 @@
 .vscode/**
 .vscode-test/**
-node_modules/**
 src/**
 .gitignore
 .yarnrc
@@ -12,3 +11,7 @@ vsc-extension-quickstart.md
 **/*.ts
 **/.vscode-test.*
 **/.eslintrc.json
+node_modules/**
+!node_modules/node-fetch/**
+!node_modules/whatwg-url/**
+!node_modules/web-streams-polyfill/**

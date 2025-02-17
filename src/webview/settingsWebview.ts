@@ -50,7 +50,7 @@ export function getSettingsWebviewContent(config: any): string {
         
         <div class="setting-item">
             <label class="setting-label">Model</label>
-            <select id="model">
+            <select id="model" onclick="refreshModels()">
                 <option value="${config.model}">${config.model}</option>
             </select>
         </div>
@@ -85,6 +85,28 @@ export function getSettingsWebviewContent(config: any): string {
         <script>
             const vscode = acquireVsCodeApi();
             
+            // 保存当前设置到 webview 状态
+            const currentState = {
+                baseUrl: "${config.baseUrl}",
+                model: "${config.model}",
+                maxTokens: ${config.maxTokens},
+                keepAlive: "${config.keepAlive}",
+                performanceMode: "${config.performanceMode}"
+            };
+            vscode.setState(currentState);
+
+            // 页面加载时恢复状态
+            window.addEventListener('load', () => {
+                const state = vscode.getState();
+                if (state) {
+                    document.getElementById('baseUrl').value = state.baseUrl;
+                    document.getElementById('model').value = state.model;
+                    document.getElementById('maxTokens').value = state.maxTokens;
+                    document.getElementById('keepAlive').value = state.keepAlive;
+                    document.getElementById('performanceMode').value = state.performanceMode;
+                }
+            });
+
             function saveSettings() {
                 const settings = {
                     baseUrl: document.getElementById('baseUrl').value,
@@ -94,9 +116,20 @@ export function getSettingsWebviewContent(config: any): string {
                     performanceMode: document.getElementById('performanceMode').value
                 };
                 
+                // 保存到 VSCode 配置
                 vscode.postMessage({
                     command: 'saveSettings',
                     settings
+                });
+
+                // 更新 webview 状态
+                vscode.setState(settings);
+            }
+
+            async function refreshModels() {
+                vscode.postMessage({
+                    command: 'refreshModels',
+                    baseUrl: document.getElementById('baseUrl').value
                 });
             }
 
@@ -104,9 +137,10 @@ export function getSettingsWebviewContent(config: any): string {
                 const message = event.data;
                 if (message.command === 'updateModels') {
                     const modelSelect = document.getElementById('model');
+                    const currentModel = modelSelect.value;
                     modelSelect.innerHTML = message.models
                         .map(model => 
-                            \`<option value="\${model}" \${model === message.currentModel ? 'selected' : ''}>\${model}</option>\`
+                            \`<option value="\${model}" \${model === currentModel ? 'selected' : ''}>\${model}</option>\`
                         ).join('');
                 }
             });
