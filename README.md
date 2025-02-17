@@ -86,7 +86,7 @@ VSCode Ollama is a powerful Visual Studio Code extension that seamlessly integra
 
 ## 📝 Changelog
 
-### 1.0.0 (2024-02-17)
+### 1.0.0 (2025-02-17)
 
 #### ✨ Features
 - Initial release
