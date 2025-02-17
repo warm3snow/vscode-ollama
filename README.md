@@ -5,11 +5,11 @@
 </p>
 
 <p align="center">
-  <a href="https://marketplace.visualstudio.com/items?itemName=vscode-ollama">
-    <img src="https://img.shields.io/visual-studio-marketplace/v/vscode-ollama.svg?color=blue&label=VS%20Code%20Marketplace&logo=visual-studio-code" alt="Visual Studio Marketplace Version">
-  </a>
-  <a href="https://marketplace.visualstudio.com/items?itemName=vscode-ollama">
-    <img src="https://img.shields.io/visual-studio-marketplace/d/vscode-ollama.svg?color=blue&label=Downloads&logo=visual-studio-code" alt="Visual Studio Marketplace Downloads">
+  <a href="https://marketplace.visualstudio.com/items?itemName=warm3snow.vscode-ollama">
+    <img src="https://img.shields.io/visual-studio-marketplace/v/warm3snow.vscode-ollama.svg?color=blue&label=VS%20Code%20Marketplace&logo=visual-studio-code" alt="Visual Studio Marketplace Version">
+    </a>
+    <a href="https://marketplace.visualstudio.com/items?itemName=warm3snow.vscode-ollama">
+    <img src="https://img.shields.io/visual-studio-marketplace/d/warm3snow.vscode-ollama.svg?color=blue&label=Downloads&logo=visual-studio-code" alt="Visual Studio Marketplace Downloads">
   </a>
   <a href="https://github.com/warm3snow/vscode-ollama/blob/master/LICENSE">
     <img src="https://img.shields.io/github/license/warm3snow/vscode-ollama.svg?color=blue&label=License&logo=github" alt="License">
