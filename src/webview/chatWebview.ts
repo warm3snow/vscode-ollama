@@ -120,6 +120,48 @@ export function getChatWebviewContent(config: any): string {
             button:active {
                 transform: translateY(0);
             }
+            .think-content {
+                margin: 8px 0;
+                padding: 8px 12px;
+                background: var(--vscode-textBlockQuote-background);
+                border-left: 3px solid var(--vscode-textBlockQuote-border);
+                font-size: 0.9em;
+                color: var(--vscode-textBlockQuote-foreground);
+            }
+            .think-header {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                cursor: pointer;
+                user-select: none;
+                color: var(--vscode-textLink-foreground);
+                font-size: 0.9em;
+            }
+            .think-header:hover {
+                color: var(--vscode-textLink-activeForeground);
+            }
+            .think-toggle {
+                display: inline-block;
+                width: 12px;
+                height: 12px;
+                text-align: center;
+                line-height: 12px;
+                transition: transform 0.2s;
+            }
+            .think-content.collapsed {
+                display: none;
+            }
+            .think-header.collapsed .think-toggle {
+                transform: rotate(-90deg);
+            }
+            .sending {
+                background: var(--vscode-errorForeground) !important;
+            }
+            
+            .sending:hover {
+                background: var(--vscode-errorForeground) !important;
+                opacity: 0.8;
+            }
         </style>
     </head>
     <body>
@@ -131,7 +173,7 @@ export function getChatWebviewContent(config: any): string {
             </button>
             <div id="input-container">
                 <input type="text" id="message-input" placeholder="有问题，尽管问，shift+enter换行" />
-                <button onclick="sendMessage()">Send</button>
+                <button id="send-button" onclick="handleSendClick()">Send</button>
             </div>
         </div>
 
@@ -140,21 +182,99 @@ export function getChatWebviewContent(config: any): string {
             const chatContainer = document.getElementById('chat-container');
             const messageInput = document.getElementById('message-input');
             const webSearchButton = document.getElementById('web-search');
+            const sendButton = document.getElementById('send-button');
             let webSearchEnabled = false;
+            let isGenerating = false;
 
-            webSearchButton.addEventListener('click', () => {
-                webSearchEnabled = !webSearchEnabled;
-                webSearchButton.classList.toggle('active', webSearchEnabled);
-                const status = webSearchButton.querySelector('.status');
-                status.style.color = webSearchEnabled ? '#4CAF50' : '#666';
-            });
+            function updateSendButton(generating) {
+                isGenerating = generating;
+                sendButton.textContent = generating ? 'Stop' : 'Send';
+                sendButton.classList.toggle('sending', generating);
+            }
+
+            function handleSendClick() {
+                if (isGenerating) {
+                    // 发送停止命令
+                    vscode.postMessage({
+                        command: 'stopGeneration'
+                    });
+                    updateSendButton(false);
+                } else {
+                    sendMessage();
+                }
+            }
+
+            function processThinkTags(content) {
+                const thinkRegex = /<think>(.*?)<\\/think>/gs;
+                let lastIndex = 0;
+                let result = '';
+                let match;
+                let thinkCount = 0;
+
+                while ((match = thinkRegex.exec(content)) !== null) {
+                    // Add text before the <think> tag
+                    result += content.slice(lastIndex, match.index);
+                    
+                    // Add the think content with collapsible UI
+                    const thinkContent = match[1].trim();
+                    result += \`
+                        <div class="think-section">
+                            <div class="think-header" onclick="toggleThink(this)">
+                                <span class="think-toggle">▼</span>
+                                <span>思考过程 #\${++thinkCount}</span>
+                            </div>
+                            <div class="think-content">\${thinkContent}</div>
+                        </div>
+                    \`;
+                    
+                    lastIndex = match.index + match[0].length;
+                }
+
+                // Add any remaining text after the last <think> tag
+                result += content.slice(lastIndex);
+                return result;
+            }
+
+            function toggleThink(header) {
+                const content = header.nextElementSibling;
+                content.classList.toggle('collapsed');
+                header.classList.toggle('collapsed');
+            }
 
             function appendMessage(content, isUser) {
                 const messageDiv = document.createElement('div');
                 messageDiv.className = \`message \${isUser ? 'user-message' : 'assistant-message'}\`;
-                messageDiv.textContent = content;
+                
+                if (isUser) {
+                    messageDiv.textContent = content;
+                } else {
+                    messageDiv.innerHTML = processThinkTags(content);
+                }
+                
                 chatContainer.appendChild(messageDiv);
                 chatContainer.scrollTop = chatContainer.scrollHeight;
+            }
+
+            function formatMessage(content: string): string {
+                // 处理代码块
+                content = content.replace(/```([\s\S]*?)```/g, (match, code) => {
+                    return `<pre class="code-block"><code>${code}</code></pre>`;
+                });
+
+                // 处理行内代码
+                content = content.replace(/`([^`]+)`/g, '<code>$1</code>');
+
+                // 处理换行和段落
+                content = content
+                    // 将连续的多个换行替换为两个换行（形成段落）
+                    .replace(/\n{3,}/g, '\n\n')
+                    // 将单个换行替换为 <br>
+                    .replace(/\n/g, '<br>')
+                    // 将段落（两个换行）替换为段落标签
+                    .replace(/<br><br>/g, '</p><p>');
+
+                // 包装在段落标签中
+                return `<p>${content}</p>`;
             }
 
             async function sendMessage() {
@@ -163,6 +283,7 @@ export function getChatWebviewContent(config: any): string {
 
                 appendMessage(content, true);
                 messageInput.value = '';
+                updateSendButton(true);
 
                 vscode.postMessage({
                     command: 'sendMessage',
@@ -174,17 +295,35 @@ export function getChatWebviewContent(config: any): string {
             messageInput.addEventListener('keydown', (e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
-                    sendMessage();
+                    if (!isGenerating) {
+                        sendMessage();
+                    } else {
+                        vscode.postMessage({
+                            command: 'stopGeneration'
+                        });
+                        updateSendButton(false);
+                    }
                 }
             });
 
             window.addEventListener('message', event => {
                 const message = event.data;
-                if (message.command === 'receiveMessage') {
-                    appendMessage(message.content, false);
+                if (message.command === 'resetChat') {
+                    // 清除所有正在流式传输的消息
+                    const streamingMessages = document.querySelectorAll('.message.assistant-message.streaming');
+                    streamingMessages.forEach(msg => {
+                        msg.classList.remove('streaming');
+                    });
                 } else if (message.command === 'streamMessage') {
                     if (!message.done) {
-                        if (!document.querySelector('.message.assistant-message.streaming')) {
+                        if (message.newMessage) {
+                            // 清除任何可能存在的流式消息
+                            const streamingMessages = document.querySelectorAll('.message.assistant-message.streaming');
+                            streamingMessages.forEach(msg => {
+                                msg.classList.remove('streaming');
+                            });
+                            
+                            // 创建新的消息 div
                             const messageDiv = document.createElement('div');
                             messageDiv.className = 'message assistant-message streaming';
                             chatContainer.appendChild(messageDiv);
@@ -192,7 +331,10 @@ export function getChatWebviewContent(config: any): string {
                         
                         const streamingDiv = document.querySelector('.message.assistant-message.streaming');
                         if (streamingDiv) {
-                            streamingDiv.textContent = (streamingDiv.textContent || '') + message.content;
+                            const formattedContent = formatMessage(
+                                processThinkTags((streamingDiv.textContent || '') + message.content)
+                            );
+                            streamingDiv.innerHTML = formattedContent;
                         }
                     } else {
                         const streamingDiv = document.querySelector('.message.assistant-message.streaming');
@@ -200,7 +342,10 @@ export function getChatWebviewContent(config: any): string {
                             streamingDiv.classList.remove('streaming');
                         }
                         chatContainer.scrollTop = chatContainer.scrollHeight;
+                        updateSendButton(false);
                     }
+                } else if (message.command === 'receiveMessage') {
+                    appendMessage(message.content, false);
                 }
             });
         </script>

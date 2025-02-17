@@ -27,7 +27,14 @@ interface OllamaChatResponse {
 	total_duration?: number;
 }
 
+// 在文件开头添加类型定义
+interface AbortError extends Error {
+	name: 'AbortError';
+}
+
 let settingsPanel: vscode.WebviewPanel | undefined = undefined;
+let currentReader: ReadableStreamDefaultReader<Uint8Array> | null = null;
+let lastMessageDiv: boolean = false;
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
@@ -194,7 +201,13 @@ export function activate(context: vscode.ExtensionContext) {
 				async message => {
 					if (message.command === 'sendMessage') {
 						try {
-							const currentConfig = getOllamaConfig(); // Get fresh config
+							// 重置消息状态
+							lastMessageDiv = false;
+							panel.webview.postMessage({
+								command: 'resetChat'
+							});
+
+							const currentConfig = getOllamaConfig();
 							const messages = [
 								{ role: 'system', content: 'You are a helpful assistant.' }
 							];
@@ -233,14 +246,18 @@ export function activate(context: vscode.ExtensionContext) {
 								throw new Error(`Failed to send message: ${response.statusText}`);
 							}
 
-							// Handle streaming response
+							// 修复 reader 的类型检查
 							const reader = response.body?.getReader();
+							if (!reader) {
+								throw new Error('Failed to get response reader');
+							}
+							currentReader = reader;
 							const decoder = new TextDecoder();
 							let content = '';
 
-							if (reader) {
+							try {
 								while (true) {
-									const { value, done } = await reader.read();
+									const { value, done } = await currentReader.read();
 									if (done) break;
 
 									const chunk = decoder.decode(value);
@@ -249,17 +266,65 @@ export function activate(context: vscode.ExtensionContext) {
 									for (const line of lines) {
 										const data = JSON.parse(line) as OllamaChatResponse;
 										content += data.message.content;
-										panel.webview.postMessage({
-											command: 'streamMessage',
-											content: data.message.content,
-											done: data.done
-										});
+										
+										// 如果是新消息且上一条消息已完成，创建新的消息 div
+										if (!lastMessageDiv) {
+											panel.webview.postMessage({
+												command: 'streamMessage',
+												content: data.message.content,
+												done: false,
+												newMessage: true  // 标记新消息开始
+											});
+											lastMessageDiv = true;
+										} else {
+											// 继续追加到当前消息
+											panel.webview.postMessage({
+												command: 'streamMessage',
+												content: data.message.content,
+												done: false,
+												newMessage: false
+											});
+										}
+
+										// 如果消息完成，重置标记
+										if (data.done) {
+											panel.webview.postMessage({
+												command: 'streamMessage',
+												content: '',
+												done: true,
+												newMessage: false
+											});
+											lastMessageDiv = false;
+										}
 									}
 								}
+							} catch (error: unknown) {
+								if (error instanceof Error && error.name === 'AbortError') {
+									// 正常的终止，不需要显示错误
+									panel.webview.postMessage({
+										command: 'streamMessage',
+										content: '\n[已终止生成]',
+										done: true
+									});
+								} else {
+									throw error;
+								}
+							} finally {
+								currentReader = null;
 							}
 						} catch (error) {
 							const errorMessage = error instanceof Error ? error.message : String(error);
 							vscode.window.showErrorMessage(`Chat error: ${errorMessage}`);
+							panel.webview.postMessage({
+								command: 'streamMessage',
+								content: `\n[错误: ${errorMessage}]`,
+								done: true
+							});
+						}
+					} else if (message.command === 'stopGeneration') {
+						if (currentReader) {
+							currentReader.cancel();
+							currentReader = null;
 						}
 					}
 				},
