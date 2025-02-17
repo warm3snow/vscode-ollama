@@ -6,16 +6,16 @@
 
 <p align="center">
   <a href="https://marketplace.visualstudio.com/items?itemName=warm3snow.vscode-ollama">
-    <img src="https://vsmarketplacebadge.apphb.com/version/warm3snow.vscode-ollama.svg" alt="VS Code Marketplace Version"/>
+    <img src="https://img.shields.io/visual-studio-marketplace/i/warm3snow.vscode-ollama?logo=visual-studio-code" alt="Downloads"/>
   </a>
   <a href="https://marketplace.visualstudio.com/items?itemName=warm3snow.vscode-ollama">
-    <img src="https://vsmarketplacebadge.apphb.com/downloads-short/warm3snow.vscode-ollama.svg" alt="Downloads"/>
+    <img src="https://img.shields.io/visual-studio-marketplace/r/warm3snow.vscode-ollama?logo=visual-studio-code" alt="Rating"/>
+  </a>
+  <a href="https://github.com/warm3snow/vscode-ollama">
+    <img src="https://img.shields.io/github/stars/warm3snow/vscode-ollama?style=social" alt="GitHub stars"/>
   </a>
   <a href="https://github.com/warm3snow/vscode-ollama/blob/main/LICENSE">
     <img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"/>
-  </a>
-  <a href="https://github.com/warm3snow/vscode-ollama/stargazers">
-    <img src="https://img.shields.io/github/stars/warm3snow/vscode-ollama.svg?style=social" alt="GitHub stars"/>
   </a>
 </p>
 
