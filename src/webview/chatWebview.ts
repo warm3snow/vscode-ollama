@@ -22,24 +22,24 @@ export function getChatWebviewContent(config: any): string {
                 border: 1px solid var(--vscode-input-border);
                 border-radius: 6px;
                 background: var(--vscode-editor-background);
+                box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
             }
             .message {
                 margin: 10px 0;
                 padding: 12px;
                 border-radius: 6px;
                 max-width: 85%;
-                box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+                background: transparent;
             }
             .user-message {
-                background: var(--vscode-button-background);
-                color: var(--vscode-button-foreground);
+                color: var(--vscode-foreground);
                 margin-left: 0;
-                border-top-left-radius: 2px;
+                opacity: 0.9;
             }
             .assistant-message {
-                background: var(--vscode-input-background);
+                color: var(--vscode-foreground);
                 margin-right: 0;
-                border-top-right-radius: 2px;
+                opacity: 1;
             }
             .input-wrapper {
                 position: relative;
@@ -47,6 +47,7 @@ export function getChatWebviewContent(config: any): string {
                 border-radius: 6px;
                 padding: 15px;
                 background: var(--vscode-editor-background);
+                box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
             }
             #web-search {
                 position: absolute;
@@ -80,7 +81,7 @@ export function getChatWebviewContent(config: any): string {
             #message-input {
                 flex: 1;
                 padding: 12px;
-                border: 2px solid var(--vscode-input-border);
+                border: 1px solid var(--vscode-input-border);
                 background: var(--vscode-input-background);
                 color: var(--vscode-input-foreground);
                 border-radius: 6px;
@@ -90,6 +91,7 @@ export function getChatWebviewContent(config: any): string {
                 min-height: 24px;
                 max-height: 200px;
                 outline: none;
+                box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.05);
             }
             #message-input:focus {
                 border-color: var(--vscode-focusBorder);
