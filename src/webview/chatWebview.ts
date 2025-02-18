@@ -269,6 +269,7 @@ export function getChatWebviewContent(config: any): string {
             const clearChatButton = document.getElementById('clear-chat');
             let webSearchEnabled = false;
             let isGenerating = false;
+            let currentModelName = 'Assistant'; // 默认值
 
             // 恢复对话历史
             const state = vscode.getState() || { messages: [] };
@@ -361,7 +362,8 @@ export function getChatWebviewContent(config: any): string {
                 vscode.postMessage({
                     command: 'sendMessage',
                     content,
-                    webSearch: webSearchEnabled
+                    webSearch: webSearchEnabled,
+                    modelName: currentModelName
                 });
             }
 
@@ -425,7 +427,7 @@ export function getChatWebviewContent(config: any): string {
                 // 添加前缀
                 const prefixDiv = document.createElement('div');
                 prefixDiv.className = 'message-prefix';
-                prefixDiv.textContent = isUser ? '- 我' : \`- \${vscode.getState()?.modelName || 'Assistant'}\`;
+                prefixDiv.textContent = isUser ? '- 我' : \`- \${currentModelName}\`;
                 messageDiv.appendChild(prefixDiv);
                 
                 // 添加消息内容
@@ -474,7 +476,7 @@ export function getChatWebviewContent(config: any): string {
                             // 添加前缀
                             const prefixDiv = document.createElement('div');
                             prefixDiv.className = 'message-prefix';
-                            prefixDiv.textContent = \`- \${vscode.getState()?.modelName || 'Assistant'}\`;
+                            prefixDiv.textContent = \`- \${currentModelName}\`;
                             messageDiv.appendChild(prefixDiv);
 
                             // 添加内容容器
@@ -503,11 +505,14 @@ export function getChatWebviewContent(config: any): string {
                             streamingDiv.classList.remove('streaming');
                             // 保存完成的消息到状态
                             const state = vscode.getState() || { messages: [] };
-                            state.messages.push({ 
-                                content: streamingDiv.innerHTML, 
-                                isUser: false 
-                            });
-                            vscode.setState(state);
+                            const contentDiv = streamingDiv.querySelector('.message-content');
+                            if (contentDiv) {
+                                state.messages.push({ 
+                                    content: contentDiv.innerHTML, 
+                                    isUser: false 
+                                });
+                                vscode.setState(state);
+                            }
                         }
                         chatContainer.scrollTop = chatContainer.scrollHeight;
                         updateSendButton(false);
@@ -541,11 +546,13 @@ export function getChatWebviewContent(config: any): string {
                     \`;
                     chatContainer.appendChild(welcomeDiv);
                     chatContainer.scrollTop = chatContainer.scrollHeight;
+                } else if (message.command === 'updateModelName') {
+                    currentModelName = message.modelName;
                 }
             });
 
+            // 在 webview 加载完成时请求模型名称
             window.addEventListener('load', () => {
-                // 通知扩展 webview 已准备就绪
                 vscode.postMessage({
                     command: 'webviewReady'
                 });

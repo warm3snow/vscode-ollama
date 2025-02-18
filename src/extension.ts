@@ -196,15 +196,20 @@ export function activate(context: vscode.ExtensionContext) {
 				}
 			);
 
-			panel.webview.html = getChatWebviewContent(getOllamaConfig());
+			const config = getOllamaConfig();
+			panel.webview.html = getChatWebviewContent(config);
 
-			// 处理来自 webview 的消息
+			// 在 webview 准备好后立即发送模型名称
 			panel.webview.onDidReceiveMessage(
 				async message => {
 					if (message.command === 'webviewReady') {
-						// 发送欢迎消息
+						// 发送欢迎消息和模型名称
 						panel.webview.postMessage({
 							command: 'welcomeMessage'
+						});
+						panel.webview.postMessage({
+							command: 'updateModelName',
+							modelName: config.model // 发送当前配置的模型名称
 						});
 					} else if (message.command === 'sendMessage') {
 						try {
@@ -319,6 +324,12 @@ export function activate(context: vscode.ExtensionContext) {
 							} finally {
 								currentReader = null;
 							}
+
+							// 在发送新消息时也更新模型名称
+							panel.webview.postMessage({
+								command: 'updateModelName',
+								modelName: currentConfig.model
+							});
 						} catch (error) {
 							const errorMessage = error instanceof Error ? error.message : String(error);
 							vscode.window.showErrorMessage(`Chat error: ${errorMessage}`);
