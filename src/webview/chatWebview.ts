@@ -420,6 +420,26 @@ export function getChatWebviewContent(config: any): string {
             .author-info a:hover {
                 text-decoration: underline;
             }
+
+            .save-notification {
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                background: var(--vscode-notificationToast-background);
+                color: var(--vscode-notificationToast-foreground);
+                padding: 8px 16px;
+                border-radius: 4px;
+                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+                z-index: 1000;
+                animation: fadeInOut 2s ease-in-out;
+            }
+
+            @keyframes fadeInOut {
+                0% { opacity: 0; transform: translateY(-20px); }
+                10% { opacity: 1; transform: translateY(0); }
+                90% { opacity: 1; transform: translateY(0); }
+                100% { opacity: 0; transform: translateY(-20px); }
+            }
         </style>
         <script>
             // Import marked from CDN instead
@@ -920,6 +940,17 @@ export function getChatWebviewContent(config: any): string {
                     chatContainer.scrollTop = chatContainer.scrollHeight;
                 } else if (message.command === 'updateModelName') {
                     currentModelName = message.modelName;
+                } else if (message.command === 'saveSuccess') {
+                    // 添加保存成功的提示
+                    const notification = document.createElement('div');
+                    notification.className = 'save-notification';
+                    notification.textContent = '设置已保存';
+                    document.body.appendChild(notification);
+
+                    // 2秒后自动移除提示
+                    setTimeout(() => {
+                        notification.remove();
+                    }, 2000);
                 }
             });
 

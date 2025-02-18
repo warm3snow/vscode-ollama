@@ -145,6 +145,7 @@ export function activate(context: vscode.ExtensionContext) {
 									await config.update('keepAlive', message.settings.keepAlive, true);
 									await config.update('performanceMode', message.settings.performanceMode, true);
 									vscode.window.showInformationMessage('Settings saved successfully');
+									settingsPanel?.webview.postMessage({ command: 'saveSuccess' });
 								} catch (error) {
 									vscode.window.showErrorMessage(`Failed to save settings: ${error}`);
 								}
