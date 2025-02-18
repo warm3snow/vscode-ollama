@@ -31,6 +31,15 @@ export function getChatWebviewContent(config: any): string {
                 max-width: 85%;
                 background: transparent;
             }
+            .message-prefix {
+                color: var(--vscode-textLink-foreground);
+                font-size: 0.9em;
+                margin-bottom: 4px;
+                opacity: 0.8;
+            }
+            .message-content {
+                margin-left: 8px;
+            }
             .user-message {
                 color: var(--vscode-foreground);
                 margin-left: 0;
@@ -212,6 +221,22 @@ export function getChatWebviewContent(config: any): string {
             .menu-item:hover {
                 background: var(--vscode-list-hoverBackground);
             }
+
+            /* 添加对话组容器样式 */
+            .conversation-group {
+                padding: 12px;
+                margin: 8px 0;
+                border-radius: 8px;
+            }
+
+            /* 交替背景色 */
+            .conversation-group:nth-child(odd) {
+                background-color: var(--vscode-editor-background);
+            }
+
+            .conversation-group:nth-child(even) {
+                background-color: var(--vscode-editor-inactiveSelectionBackground);
+            }
         </style>
     </head>
     <body>
@@ -378,16 +403,42 @@ export function getChatWebviewContent(config: any): string {
             }
 
             function appendMessage(content, isUser) {
+                let currentGroup;
+                if (isUser) {
+                    // 创建新的对话组
+                    currentGroup = document.createElement('div');
+                    currentGroup.className = 'conversation-group';
+                    chatContainer.appendChild(currentGroup);
+                } else {
+                    // 获取最后一个对话组
+                    currentGroup = chatContainer.lastElementChild;
+                    if (!currentGroup || !currentGroup.classList.contains('conversation-group')) {
+                        currentGroup = document.createElement('div');
+                        currentGroup.className = 'conversation-group';
+                        chatContainer.appendChild(currentGroup);
+                    }
+                }
+
                 const messageDiv = document.createElement('div');
                 messageDiv.className = \`message \${isUser ? 'user-message' : 'assistant-message'}\`;
                 
-                if (isUser) {
-                    messageDiv.textContent = content;
-                } else {
-                    messageDiv.innerHTML = processThinkTags(content);
-                }
+                // 添加前缀
+                const prefixDiv = document.createElement('div');
+                prefixDiv.className = 'message-prefix';
+                prefixDiv.textContent = isUser ? '- 我' : \`- \${vscode.getState()?.modelName || 'Assistant'}\`;
+                messageDiv.appendChild(prefixDiv);
                 
-                chatContainer.appendChild(messageDiv);
+                // 添加消息内容
+                const contentDiv = document.createElement('div');
+                contentDiv.className = 'message-content';
+                if (isUser) {
+                    contentDiv.textContent = content;
+                } else {
+                    contentDiv.innerHTML = processThinkTags(content);
+                }
+                messageDiv.appendChild(contentDiv);
+                
+                currentGroup.appendChild(messageDiv);
                 chatContainer.scrollTop = chatContainer.scrollHeight;
 
                 // 保存消息到状态
@@ -407,17 +458,44 @@ export function getChatWebviewContent(config: any): string {
                 } else if (message.command === 'streamMessage') {
                     if (!message.done) {
                         if (message.newMessage) {
+                            let currentGroup = chatContainer.lastElementChild;
+                            
+                            // 确保消息在正确的对话组中
+                            if (!currentGroup || !currentGroup.classList.contains('conversation-group')) {
+                                currentGroup = document.createElement('div');
+                                currentGroup.className = 'conversation-group';
+                                chatContainer.appendChild(currentGroup);
+                            }
+
                             // 创建新的消息 div
                             const messageDiv = document.createElement('div');
                             messageDiv.className = 'message assistant-message streaming';
-                            chatContainer.appendChild(messageDiv);
-                        }
-                        
-                        const streamingDiv = document.querySelector('.message.assistant-message.streaming');
-                        if (streamingDiv) {
-                            streamingDiv.innerHTML = processThinkTags(
-                                (streamingDiv.textContent || '') + message.content
-                            );
+                            
+                            // 添加前缀
+                            const prefixDiv = document.createElement('div');
+                            prefixDiv.className = 'message-prefix';
+                            prefixDiv.textContent = \`- \${vscode.getState()?.modelName || 'Assistant'}\`;
+                            messageDiv.appendChild(prefixDiv);
+
+                            // 添加内容容器
+                            const contentDiv = document.createElement('div');
+                            contentDiv.className = 'message-content';
+                            contentDiv.textContent = message.content;
+                            messageDiv.appendChild(contentDiv);
+                            
+                            currentGroup.appendChild(messageDiv);
+                            chatContainer.scrollTop = chatContainer.scrollHeight;
+                        } else {
+                            const streamingDiv = document.querySelector('.message.assistant-message.streaming');
+                            if (streamingDiv) {
+                                const contentDiv = streamingDiv.querySelector('.message-content');
+                                if (contentDiv) {
+                                    contentDiv.innerHTML = processThinkTags(
+                                        (contentDiv.innerHTML || '') + message.content
+                                    );
+                                    chatContainer.scrollTop = chatContainer.scrollHeight;
+                                }
+                            }
                         }
                     } else {
                         const streamingDiv = document.querySelector('.message.assistant-message.streaming');
