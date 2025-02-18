@@ -59,6 +59,7 @@ export function getChatWebviewContent(config: any): string {
             }
             .input-wrapper {
                 position: relative;
+                margin-bottom: 32px;
                 border: 1px solid var(--vscode-input-border);
                 border-radius: 6px;
                 padding: 15px;
@@ -328,6 +329,97 @@ export function getChatWebviewContent(config: any): string {
             .think-header.collapsed .think-toggle {
                 transform: rotate(-90deg);
             }
+
+            /* 命令提示样式 */
+            .command-suggestions {
+                position: absolute;
+                bottom: 100%;
+                left: 0;
+                right: 0;
+                background: var(--vscode-dropdown-background);
+                border: 1px solid var(--vscode-dropdown-border);
+                border-radius: 6px;
+                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+                z-index: 1000;
+                max-height: 200px;
+                overflow-y: auto;
+            }
+
+            .command-item {
+                padding: 8px 12px;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            }
+
+            .command-item:hover,
+            .command-item.selected {
+                background: var(--vscode-list-hoverBackground);
+            }
+
+            .command-name {
+                color: var(--vscode-textLink-foreground);
+                font-weight: 500;
+            }
+
+            .command-description {
+                color: var(--vscode-descriptionForeground);
+                font-size: 0.9em;
+            }
+
+            /* 添加命令建议相关的样式 */
+            #command-suggestions {
+                position: absolute;
+                top: -120px;
+                left: 0;
+                right: 0;
+                background: var(--vscode-dropdown-background);
+                border: 1px solid var(--vscode-dropdown-border);
+                border-radius: 4px;
+                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+                z-index: 1000;
+            }
+            .command-item {
+                padding: 8px 12px;
+                cursor: pointer;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+            }
+            .command-item:hover, .command-item.selected {
+                background: var(--vscode-list-hoverBackground);
+            }
+            .command-name {
+                color: var(--vscode-foreground);
+                font-weight: bold;
+            }
+            .command-description {
+                color: var(--vscode-descriptionForeground);
+                font-size: 0.9em;
+                margin-left: 12px;
+            }
+
+            /* 修改作者信息样式 */
+            .author-info {
+                position: absolute;
+                bottom: -24px;
+                right: 0;
+                padding: 4px 8px;
+                font-size: 12px;
+                color: var(--vscode-descriptionForeground);
+                text-align: right;
+                opacity: 0.8;
+            }
+
+            .author-info a {
+                color: var(--vscode-textLink-foreground);
+                text-decoration: none;
+            }
+
+            .author-info a:hover {
+                text-decoration: underline;
+            }
         </style>
         <script>
             // Import marked from CDN instead
@@ -352,6 +444,10 @@ export function getChatWebviewContent(config: any): string {
                     placeholder="有问题，尽管问，shift+enter换行" 
                     rows="1"></textarea>
                 <button id="send-button">Send</button>
+            </div>
+            <div class="author-info">
+                Created by <a href="https://github.com/warm3snow" target="_blank">warm3snow</a> | 
+                <a href="https://github.com/warm3snow/vscode-ollama" target="_blank">GitHub Repository</a>
             </div>
         </div>
 
@@ -396,13 +492,13 @@ export function getChatWebviewContent(config: any): string {
 
             // 发送按钮点击事件
             sendButton.onclick = () => {
-                if (isGenerating) {
+                if (!isGenerating) {
+                    sendMessage();
+                } else {
                     vscode.postMessage({
                         command: 'stopGeneration'
                     });
                     updateSendButton(false);
-                } else {
-                    sendMessage();
                 }
             };
 
@@ -416,12 +512,133 @@ export function getChatWebviewContent(config: any): string {
                 }
             };
 
-            // 输入框事件处理
-            messageInput.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter') {
-                    if (e.shiftKey) {
-                        return; // Shift+Enter 换行
+            // 修改命令定义
+            const commands = [
+                {
+                    name: '/reset',
+                    description: '重置对话上下文',
+                    execute: () => {
+                        // 清空消息历史
+                        vscode.postMessage({
+                            command: 'sendMessage',
+                            content: '重置对话上下文',
+                            webSearch: webSearchEnabled,
+                            modelName: currentModelName,
+                            resetContext: true
+                        });
+                        updateSendButton(true); // 更新按钮状态
                     }
+                }
+                // 可以在这里添加更多命令
+            ];
+
+            let commandSuggestions = null;
+            let selectedCommandIndex = -1;
+
+            // 修改命令提示的更新逻辑
+            function updateCommandSuggestions(input) {
+                const suggestionsDiv = document.getElementById('command-suggestions');
+                if (!suggestionsDiv) {
+                    // 如果建议框不存在，创建它
+                    const div = document.createElement('div');
+                    div.id = 'command-suggestions';
+                    document.querySelector('.input-wrapper').appendChild(div);
+                    return updateCommandSuggestions(input);
+                }
+
+                // 当输入 '/' 时显示所有命令
+                if (input === '/') {
+                    selectedCommandIndex = -1;
+                    const suggestionsHtml = commands.map((cmd, index) => \`
+                        <div class="command-item" data-command="\${cmd.name}" onclick="selectCommand('\${cmd.name}')">
+                            <span class="command-name">\${cmd.name}</span>
+                            <span class="command-description">\${cmd.description}</span>
+                        </div>
+                    \`).join('');
+                    
+                    suggestionsDiv.innerHTML = suggestionsHtml;
+                    suggestionsDiv.style.display = 'block';
+                }
+                // 当输入以 '/' 开头的其他内容时，进行过滤
+                else if (input.startsWith('/')) {
+                    const query = input.toLowerCase();
+                    const filteredCommands = commands.filter(cmd => 
+                        cmd.name.toLowerCase().startsWith(query)
+                    );
+
+                    if (filteredCommands.length > 0) {
+                        selectedCommandIndex = -1;
+                        const suggestionsHtml = filteredCommands.map((cmd, index) => \`
+                            <div class="command-item" data-command="\${cmd.name}" onclick="selectCommand('\${cmd.name}')">
+                                <span class="command-name">\${cmd.name}</span>
+                                <span class="command-description">\${cmd.description}</span>
+                            </div>
+                        \`).join('');
+                        
+                        suggestionsDiv.innerHTML = suggestionsHtml;
+                        suggestionsDiv.style.display = 'block';
+                    } else {
+                        suggestionsDiv.style.display = 'none';
+                    }
+                } else {
+                    suggestionsDiv.style.display = 'none';
+                }
+            }
+
+            // 添加命令选择函数
+            function selectCommand(commandName) {
+                messageInput.value = commandName + ' ';
+                hideCommandSuggestions();
+                messageInput.focus();
+            }
+
+            // 修改键盘事件处理
+            messageInput.addEventListener('keydown', (e) => {
+                const suggestionsDiv = document.getElementById('command-suggestions');
+                const isVisible = suggestionsDiv && suggestionsDiv.style.display === 'block';
+
+                if (isVisible) {
+                    const items = suggestionsDiv.querySelectorAll('.command-item');
+                    
+                    if (e.key === 'Tab') {
+                        e.preventDefault();
+                        if (items.length > 0) {
+                            const command = items[0].getAttribute('data-command');
+                            if (command) {
+                                selectCommand(command);
+                            }
+                        }
+                    } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                        e.preventDefault();
+                        
+                        if (e.key === 'ArrowUp') {
+                            selectedCommandIndex = selectedCommandIndex <= 0 ? items.length - 1 : selectedCommandIndex - 1;
+                        } else {
+                            selectedCommandIndex = selectedCommandIndex >= items.length - 1 ? 0 : selectedCommandIndex + 1;
+                        }
+
+                        items.forEach((item, index) => {
+                            item.classList.toggle('selected', index === selectedCommandIndex);
+                        });
+
+                        if (selectedCommandIndex >= 0) {
+                            const command = items[selectedCommandIndex].getAttribute('data-command');
+                            if (command) {
+                                messageInput.value = command + ' ';
+                            }
+                        }
+                    } else if (e.key === 'Enter') {
+                        e.preventDefault();
+                        if (selectedCommandIndex >= 0) {
+                            const command = items[selectedCommandIndex].getAttribute('data-command');
+                            if (command) {
+                                selectCommand(command);
+                            }
+                        }
+                    } else if (e.key === 'Escape') {
+                        hideCommandSuggestions();
+                    }
+                } else if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
                     if (!isGenerating) {
                         sendMessage();
@@ -434,12 +651,33 @@ export function getChatWebviewContent(config: any): string {
                 }
             });
 
-            // 输入框自动调整高度
-            messageInput.addEventListener('input', function() {
-                this.style.height = 'auto';
-                const newHeight = Math.min(this.scrollHeight, 200);
-                this.style.height = newHeight + 'px';
+            // 修改输入事件处理
+            messageInput.addEventListener('input', (e) => {
+                const input = e.target.value;
+                updateCommandSuggestions(input);
+                
+                // 保持原有的自动调整高度功能
+                e.target.style.height = 'auto';
+                const newHeight = Math.min(e.target.scrollHeight, 200);
+                e.target.style.height = newHeight + 'px';
             });
+
+            // 添加点击外部关闭提示的处理
+            document.addEventListener('click', (e) => {
+                const suggestionsDiv = document.getElementById('command-suggestions');
+                const inputWrapper = document.querySelector('.input-wrapper');
+                if (suggestionsDiv && !inputWrapper.contains(e.target)) {
+                    hideCommandSuggestions();
+                }
+            });
+
+            function hideCommandSuggestions() {
+                const suggestionsDiv = document.getElementById('command-suggestions');
+                if (suggestionsDiv) {
+                    suggestionsDiv.style.display = 'none';
+                    selectedCommandIndex = -1;
+                }
+            }
 
             function updateSendButton(generating) {
                 isGenerating = generating;
@@ -447,10 +685,25 @@ export function getChatWebviewContent(config: any): string {
                 sendButton.classList.toggle('sending', generating);
             }
 
-            function sendMessage() {
+            async function sendMessage() {
                 const content = messageInput.value.trim();
                 if (!content) return;
 
+                // 检查是否是命令
+                if (content.startsWith('/')) {
+                    const commandName = content.split(' ')[0];
+                    const command = commands.find(cmd => cmd.name === commandName);
+                    if (command) {
+                        appendMessage(content, true); // 添加用户输入到聊天记录
+                        messageInput.value = '';
+                        messageInput.style.height = 'auto';
+                        command.execute();
+                        return;
+                    }
+                    // 如果不是有效命令，作为普通消息发送
+                }
+
+                // 常规消息发送逻辑
                 appendMessage(content, true);
                 messageInput.value = '';
                 messageInput.style.height = 'auto';
@@ -676,7 +929,26 @@ export function getChatWebviewContent(config: any): string {
                     command: 'webviewReady'
                 });
             });
+
+            // 在页面加载时创建命令提示元素
+            createCommandSuggestions();
+
+            // 更新选中状态
+            function updateSelection() {
+                const items = document.querySelectorAll('.command-item');
+                items.forEach((item, index) => {
+                    if (index === selectedCommandIndex) {
+                        item.classList.add('selected');
+                        const command = item.getAttribute('data-command');
+                        if (command) {
+                            document.getElementById('message-input').value = command;
+                        }
+                    } else {
+                        item.classList.remove('selected');
+                    }
+                });
+            }
         </script>
     </body>
     </html>`;
-} 
+}

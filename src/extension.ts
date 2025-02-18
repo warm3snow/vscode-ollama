@@ -213,14 +213,8 @@ export function activate(context: vscode.ExtensionContext) {
 						});
 					} else if (message.command === 'sendMessage') {
 						try {
-							// 重置消息状态
-							lastMessageDiv = false;
-							panel.webview.postMessage({
-								command: 'resetChat'
-							});
-
 							const currentConfig = getOllamaConfig();
-							const messages = [
+							const messages = message.resetContext ? [] : [
 								{ role: 'system', content: 'You are a helpful assistant.' }
 							];
 
