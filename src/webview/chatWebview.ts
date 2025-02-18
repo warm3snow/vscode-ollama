@@ -1,6 +1,13 @@
 import * as vscode from 'vscode';
+import * as fs from 'fs';
+import * as path from 'path';
+import { marked } from 'marked';
 
 export function getChatWebviewContent(config: any): string {
+    // Remove the file reading code
+    // const markedPath = path.join(__dirname, '..', 'lib', 'marked.min.js');
+    // const marked = fs.readFileSync(markedPath, 'utf-8');
+
     return `<!DOCTYPE html>
     <html>
     <head>
@@ -237,7 +244,97 @@ export function getChatWebviewContent(config: any): string {
             .conversation-group:nth-child(even) {
                 background-color: var(--vscode-editor-inactiveSelectionBackground);
             }
+
+            /* 添加Markdown样式 */
+            .markdown-content {
+                line-height: 1.6;
+            }
+            .markdown-content code {
+                background: var(--vscode-textCodeBlock-background);
+                padding: 2px 6px;
+                border-radius: 4px;
+                font-family: var(--vscode-editor-font-family);
+                font-size: 0.9em;
+            }
+            .markdown-content pre {
+                background: var(--vscode-textCodeBlock-background);
+                padding: 16px;
+                border-radius: 6px;
+                overflow-x: auto;
+            }
+            .markdown-content pre code {
+                background: none;
+                padding: 0;
+            }
+            .markdown-content blockquote {
+                border-left: 4px solid var(--vscode-textBlockQuote-border);
+                margin: 0;
+                padding-left: 16px;
+                color: var(--vscode-textBlockQuote-foreground);
+            }
+            .markdown-content table {
+                border-collapse: collapse;
+                width: 100%;
+                margin: 16px 0;
+            }
+            .markdown-content th, .markdown-content td {
+                border: 1px solid var(--vscode-input-border);
+                padding: 8px;
+            }
+
+            .think-section {
+                margin: 10px 0;
+                background: var(--vscode-editor-inactiveSelectionBackground);
+                border-radius: 6px;
+                overflow: hidden;
+            }
+
+            .think-header {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                padding: 8px 12px;
+                cursor: pointer;
+                user-select: none;
+                color: var(--vscode-textLink-foreground);
+                font-size: 0.9em;
+            }
+
+            .think-header:hover {
+                background: var(--vscode-list-hoverBackground);
+            }
+
+            .think-toggle {
+                display: inline-block;
+                width: 12px;
+                height: 12px;
+                text-align: center;
+                line-height: 12px;
+                transition: transform 0.2s;
+            }
+
+            .think-content {
+                padding: 12px;
+                white-space: pre-wrap;
+                font-family: var(--vscode-editor-font-family);
+                line-height: 1.5;
+                border-top: 1px solid var(--vscode-input-border);
+            }
+
+            .think-content.collapsed {
+                display: none;
+            }
+
+            .think-header.collapsed .think-toggle {
+                transform: rotate(-90deg);
+            }
         </style>
+        <script>
+            // Import marked from CDN instead
+            const markedScript = document.createElement('script');
+            markedScript.src = 'https://cdn.jsdelivr.net/npm/marked@9.0.0/marked.min.js';
+            document.head.appendChild(markedScript);
+        </script>
     </head>
     <body>
         <div id="chat-container"></div>
@@ -368,17 +465,15 @@ export function getChatWebviewContent(config: any): string {
             }
 
             function processThinkTags(content) {
-                const thinkRegex = /<think>(.*?)<\\/think>/gs;
+                const thinkRegex = /<think>([\\s\\S]*?)<\\/think>/g;
                 let lastIndex = 0;
                 let result = '';
                 let match;
                 let thinkCount = 0;
 
                 while ((match = thinkRegex.exec(content)) !== null) {
-                    // Add text before the <think> tag
                     result += content.slice(lastIndex, match.index);
                     
-                    // Add the think content with collapsible UI
                     const thinkContent = match[1].trim();
                     result += \`
                         <div class="think-section">
@@ -393,7 +488,6 @@ export function getChatWebviewContent(config: any): string {
                     lastIndex = match.index + match[0].length;
                 }
 
-                // Add any remaining text after the last <think> tag
                 result += content.slice(lastIndex);
                 return result;
             }
@@ -402,6 +496,28 @@ export function getChatWebviewContent(config: any): string {
                 const content = header.nextElementSibling;
                 content.classList.toggle('collapsed');
                 header.classList.toggle('collapsed');
+            }
+
+            function processMessage(content) {
+                content = processThinkTags(content);
+                
+                try {
+                    content = content.replace(/<div class="think-section">([\\s\\S]*?)<\\/div>/g, match => 
+                        \`<!--think-section-start-->\${match}<!--think-section-end-->\`
+                    );
+                    
+                    content = marked.parse(content, {
+                        gfm: true,
+                        breaks: true,
+                        sanitize: false
+                    });
+                    
+                    content = content.replace(/<!--think-section-start-->([\\s\\S]*?)<!--think-section-end-->/g, '$1');
+                } catch (e) {
+                    console.error('Markdown parsing error:', e);
+                }
+                
+                return content;
             }
 
             function appendMessage(content, isUser) {
@@ -436,7 +552,9 @@ export function getChatWebviewContent(config: any): string {
                 if (isUser) {
                     contentDiv.textContent = content;
                 } else {
-                    contentDiv.innerHTML = processThinkTags(content);
+                    // 为AI消息添加markdown-content类
+                    contentDiv.className += ' markdown-content';
+                    contentDiv.innerHTML = processMessage(content);
                 }
                 messageDiv.appendChild(contentDiv);
                 
@@ -492,7 +610,8 @@ export function getChatWebviewContent(config: any): string {
                             if (streamingDiv) {
                                 const contentDiv = streamingDiv.querySelector('.message-content');
                                 if (contentDiv) {
-                                    contentDiv.innerHTML = processThinkTags(
+                                    contentDiv.className = 'message-content markdown-content';
+                                    contentDiv.innerHTML = processMessage(
                                         (contentDiv.innerHTML || '') + message.content
                                     );
                                     chatContainer.scrollTop = chatContainer.scrollHeight;

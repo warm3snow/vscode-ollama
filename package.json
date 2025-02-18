@@ -108,6 +108,7 @@
   "dependencies": {
     "node-fetch": "^2.6.1",
     "whatwg-url": "^11.0.0",
-    "web-streams-polyfill": "^3.2.1"
+    "web-streams-polyfill": "^3.2.1",
+    "marked": "^9.0.0"
   }
 }
