@@ -339,6 +339,24 @@ export function activate(context: vscode.ExtensionContext) {
 							currentReader.cancel();
 							currentReader = null;
 						}
+					} else if (message.command === 'toggleTheme') {
+						try {
+							// 应用新主题
+							await vscode.workspace.getConfiguration('workbench').update(
+								'colorTheme',
+								message.theme === 'dark' ? 'Default Dark+' : 'Default Light+',
+								vscode.ConfigurationTarget.Global
+							);
+							
+							// 通知 webview 主题已更改
+							panel.webview.postMessage({
+								command: 'themeChanged',
+								isDark: message.theme === 'dark'
+							});
+						} catch (error) {
+							console.error('Failed to toggle theme:', error);
+							vscode.window.showErrorMessage('Failed to toggle theme');
+						}
 					}
 				},
 				undefined,

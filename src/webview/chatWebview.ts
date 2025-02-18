@@ -201,7 +201,7 @@ export function getChatWebviewContent(config: any): string {
                 opacity: 1;
             }
             
-            /* 优化菜单样式 */
+            /* 菜单样式优化 */
             .menu {
                 position: absolute;
                 top: 40px;
@@ -211,22 +211,69 @@ export function getChatWebviewContent(config: any): string {
                 border-radius: 6px;
                 box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
                 z-index: 1000;
+                min-width: 120px;
+                display: none;
             }
             
             .menu.show {
                 display: block;
             }
             
+            /* 修改二级菜单样式 */
+            .has-submenu {
+                position: relative;
+                padding-right: 24px;
+            }
+
+            .has-submenu::after {
+                content: '◀'; /* 改为左箭头 */
+                position: absolute;
+                right: 8px;
+                top: 50%;
+                transform: translateY(-50%);
+                font-size: 10px;
+                opacity: 0.7;
+            }
+
+            .submenu {
+                position: absolute;
+                right: 100%; /* 改为右侧100% */
+                top: 0;
+                background: var(--vscode-dropdown-background);
+                border: 1px solid var(--vscode-dropdown-border);
+                border-radius: 6px;
+                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+                display: none;
+                min-width: 120px;
+                margin-right: 4px; /* 添加间距 */
+            }
+
+            .has-submenu:hover .submenu {
+                display: block;
+            }
+
             .menu-item {
                 padding: 8px 16px;
                 cursor: pointer;
                 color: var(--vscode-foreground);
                 font-size: 13px;
                 white-space: nowrap;
+                transition: background-color 0.2s ease;
             }
             
             .menu-item:hover {
                 background: var(--vscode-list-hoverBackground);
+            }
+
+            .menu-separator {
+                height: 1px;
+                background-color: var(--vscode-dropdown-border);
+                margin: 4px 0;
+            }
+
+            /* 当前主题项的样式 */
+            .menu-item.active {
+                color: var(--vscode-textLink-foreground);
             }
 
             /* 美化聊天容器边框 */
@@ -452,6 +499,14 @@ export function getChatWebviewContent(config: any): string {
         <button class="menu-button" id="menu-button">⋯</button>
         <div class="menu" id="menu">
             <div class="menu-item" id="clear-chat">清除对话</div>
+            <div class="menu-separator"></div>
+            <div class="menu-item has-submenu">
+                主题切换
+                <div class="submenu">
+                    <div class="menu-item" id="theme-light">浅色主题</div>
+                    <div class="menu-item" id="theme-dark">深色主题</div>
+                </div>
+            </div>
         </div>
         <div class="input-wrapper">
             <button id="web-search">
@@ -1015,6 +1070,44 @@ export function getChatWebviewContent(config: any): string {
                     }
                 });
             }
+
+            // 添加主题切换相关代码
+            const themeLightItem = document.getElementById('theme-light');
+            const themeDarkItem = document.getElementById('theme-dark');
+
+            // 更新主题菜单项状态
+            function updateThemeMenuState(isDark) {
+                themeLightItem.classList.toggle('active', !isDark);
+                themeDarkItem.classList.toggle('active', isDark);
+            }
+
+            // 初始化主题状态
+            updateThemeMenuState(document.body.classList.contains('vscode-dark'));
+
+            // 添加主题切换事件监听
+            themeLightItem.addEventListener('click', () => {
+                vscode.postMessage({
+                    command: 'toggleTheme',
+                    theme: 'light'
+                });
+                menu.classList.remove('show');
+            });
+
+            themeDarkItem.addEventListener('click', () => {
+                vscode.postMessage({
+                    command: 'toggleTheme',
+                    theme: 'dark'
+                });
+                menu.classList.remove('show');
+            });
+
+            // 监听主题变化消息
+            window.addEventListener('message', event => {
+                const message = event.data;
+                if (message.command === 'themeChanged') {
+                    updateThemeMenuState(message.isDark);
+                }
+            });
         </script>
     </body>
     </html>`;
