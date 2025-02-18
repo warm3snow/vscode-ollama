@@ -26,15 +26,15 @@ export function getChatWebviewContent(config: any): string {
                 overflow-y: auto;
                 margin-bottom: 20px;
                 padding: 15px;
-                border: 1px solid var(--vscode-input-border);
-                border-radius: 6px;
+                border: 1px solid #e0e0e0;
+                border-radius: 8px;
                 background: var(--vscode-editor-background);
-                box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+                box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
             }
             .message {
                 margin: 10px 0;
                 padding: 12px;
-                border-radius: 6px;
+                border-radius: 8px;
                 max-width: 85%;
                 background: transparent;
             }
@@ -60,11 +60,10 @@ export function getChatWebviewContent(config: any): string {
             .input-wrapper {
                 position: relative;
                 margin-bottom: 32px;
-                border: 1px solid var(--vscode-input-border);
-                border-radius: 6px;
                 padding: 15px;
                 background: var(--vscode-editor-background);
-                box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+                border-radius: 8px;
+                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
             }
             #web-search {
                 position: absolute;
@@ -98,7 +97,7 @@ export function getChatWebviewContent(config: any): string {
             #message-input {
                 flex: 1;
                 padding: 12px;
-                border: 1px solid var(--vscode-input-border);
+                border: none;
                 background: var(--vscode-input-background);
                 color: var(--vscode-input-foreground);
                 border-radius: 6px;
@@ -108,15 +107,14 @@ export function getChatWebviewContent(config: any): string {
                 min-height: 24px;
                 max-height: 200px;
                 outline: none;
-                box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.05);
             }
             #message-input:focus {
-                border-color: var(--vscode-focusBorder);
-                box-shadow: 0 0 0 2px var(--vscode-focusBorder, #007fd4)33;
+                outline: none;
+                background: var(--vscode-input-background);
             }
             #message-input:hover:not(:focus) {
-                border-color: var(--vscode-input-border);
-                box-shadow: 0 0 0 1px var(--vscode-input-border);
+                outline: none;
+                background: var(--vscode-input-background);
             }
             button {
                 padding: 8px 16px;
@@ -230,14 +228,14 @@ export function getChatWebviewContent(config: any): string {
                 background: var(--vscode-list-hoverBackground);
             }
 
-            /* 添加对话组容器样式 */
+            /* 美化聊天容器边框 */
             .conversation-group {
                 padding: 12px;
                 margin: 8px 0;
                 border-radius: 8px;
+                transition: background-color 0.2s ease;
             }
 
-            /* 交替背景色 */
             .conversation-group:nth-child(odd) {
                 background-color: var(--vscode-editor-background);
             }
