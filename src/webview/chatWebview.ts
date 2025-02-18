@@ -180,35 +180,36 @@ export function getChatWebviewContent(config: any): string {
                 opacity: 0.8;
             }
 
+            /* 优化菜单按钮位置和样式 */
             .menu-button {
                 position: absolute;
-                top: 10px;
-                right: 10px;
-                padding: 4px 8px;
+                top: 15px;          /* 调整垂直位置 */
+                right: 15px;        /* 调整水平位置 */
+                padding: 8px 12px;  /* 增加点击区域 */
                 background: transparent;
                 border: none;
                 cursor: pointer;
-                font-size: 16px;
+                font-size: 20px;
                 min-width: auto;
                 color: var(--vscode-foreground);
                 opacity: 0.6;
+                line-height: 0.5;
+                transition: opacity 0.2s ease;
             }
             
             .menu-button:hover {
                 opacity: 1;
-                background: transparent;
-                transform: none;
             }
             
+            /* 优化菜单样式 */
             .menu {
                 position: absolute;
                 top: 40px;
-                right: 10px;
+                right: 15px;
                 background: var(--vscode-dropdown-background);
                 border: 1px solid var(--vscode-dropdown-border);
-                border-radius: 4px;
+                border-radius: 6px;
                 box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-                display: none;
                 z-index: 1000;
             }
             
@@ -448,7 +449,7 @@ export function getChatWebviewContent(config: any): string {
     </head>
     <body>
         <div id="chat-container"></div>
-        <button class="menu-button" id="menu-button">⋮</button>
+        <button class="menu-button" id="menu-button">⋯</button>
         <div class="menu" id="menu">
             <div class="menu-item" id="clear-chat">清除对话</div>
         </div>
@@ -501,9 +502,46 @@ export function getChatWebviewContent(config: any): string {
                 }
             });
 
-            // 清除对话按钮点击事件
+            // 修改清除对话的处理逻辑
             clearChatButton.onclick = () => {
+                // 保存欢迎消息
+                const welcomeMessage = chatContainer.querySelector('.message:first-child');
+                
+                // 清除所有消息
                 chatContainer.innerHTML = '';
+                
+                // 如果存在欢迎消息，重新添加
+                if (welcomeMessage && welcomeMessage.innerHTML.includes('Welcome to VSCode Ollama')) {
+                    chatContainer.appendChild(welcomeMessage.cloneNode(true));
+                } else {
+                    // 如果没有欢迎消息，创建新的
+                    const welcomeDiv = document.createElement('div');
+                    welcomeDiv.className = 'message assistant-message';
+                    welcomeDiv.innerHTML = \`
+                        <div style="
+                            background: var(--vscode-textLink-activeForeground);
+                            padding: 15px;
+                            border-radius: 8px;
+                            margin-bottom: 20px;
+                            animation: fadeIn 0.5s ease-in;
+                        ">
+                            <h2 style="margin: 0 0 10px 0; color: var(--vscode-button-foreground);">
+                                👋 Welcome to VSCode Ollama!
+                            </h2>
+                            <p style="margin: 0; color: var(--vscode-button-foreground);">
+                                <a href="https://github.com/warm3snow/vscode-ollama" style="color: var(--vscode-button-foreground);">
+                                [vscode-ollama] </a>是一款基于本地 Ollama 服务的 VS Code 扩展，支持模型配置、联网查询等多种特性。欢迎关注GitHub仓库并Star以支持开发者持续优化！
+                                <br><br>
+                                GitHub 仓库：<a href="https://github.com/warm3snow/vscode-ollama" style="color: var(--vscode-button-foreground);">
+                                    https://github.com/warm3snow/vscode-ollama
+                                </a>
+                            </p>
+                        </div>
+                    \`;
+                    chatContainer.appendChild(welcomeDiv);
+                }
+
+                // 重置状态
                 vscode.setState({ messages: [] });
                 menu.classList.remove('show');
             };
