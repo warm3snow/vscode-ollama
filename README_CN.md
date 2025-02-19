@@ -47,6 +47,12 @@ VSCode Ollama 是一个强大的 Visual Studio Code 扩展，它将 Ollama 的�
 
 ## 🚀 快速开始
 
+## 📺 使用教程
+
+观看快速入门视频教程：
+
+<video src="resources/tutorial.mp4" width="100%"></video>
+
 1. **安装 Ollama**
    ```bash
    # macOS

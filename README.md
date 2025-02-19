@@ -47,6 +47,12 @@ VSCode Ollama is a powerful Visual Studio Code extension that seamlessly integra
 
 ## 🚀 Quick Start
 
+## 📺 Tutorial
+
+Watch this quick tutorial to get started:
+
+<video src="resources/tutorial.mp4" width="100%"></video>
+
 1. **Install Ollama**
    ```bash
    # macOS
