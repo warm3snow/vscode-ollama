@@ -39,12 +39,6 @@ let lastMessageDiv: boolean = false;
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
 export function activate(context: vscode.ExtensionContext) {
-	// 添加详细的激活日志
-	const channel = vscode.window.createOutputChannel('Ollama Extension');
-	channel.appendLine('Activating vscode-ollama extension...');
-	channel.appendLine(`Extension path: ${context.extensionPath}`);
-	channel.show();
-
 	try {
 		let panel: vscode.WebviewPanel | undefined;  // 声明在更高的作用域
 
@@ -76,10 +70,7 @@ export function activate(context: vscode.ExtensionContext) {
 		}
 
 		// Register settings command
-		channel.appendLine('Registering settings command...');
 		let settingsCommand = vscode.commands.registerCommand('vscode-ollama.settings', () => {
-			channel.appendLine('Executing settings command...');
-			console.log('Executing vscode-ollama.settings command');
 			if (settingsPanel) {
 				settingsPanel.reveal(vscode.ViewColumn.One);
 			} else {
@@ -420,13 +411,8 @@ export function activate(context: vscode.ExtensionContext) {
 				}
 			})
 		);
-
-		// 确认激活完成
-		channel.appendLine('vscode-ollama extension activated successfully');
-		vscode.window.showInformationMessage('Ollama extension is now active');
 	} catch (error) {
-		channel.appendLine(`Error during activation: ${error}`);
-		vscode.window.showErrorMessage(`Failed to activate Ollama extension: ${error}`);
+		vscode.window.showErrorMessage(`Failed to activate: ${error}`);
 	}
 }
 

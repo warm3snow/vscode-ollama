@@ -15,14 +15,8 @@ export default [{
     },
 
     rules: {
-        "@typescript-eslint/naming-convention": ["warn", {
-            selector: "import",
-            format: ["camelCase", "PascalCase"],
-        }],
-
-        curly: "warn",
-        eqeqeq: "warn",
-        "no-throw-literal": "warn",
-        semi: "warn",
+        "semi": "warn",
+        "curly": "warn",
+        "eqeqeq": "warn"
     },
 }];

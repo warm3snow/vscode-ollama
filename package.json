@@ -95,7 +95,6 @@
     "test": "node ./out/test/runTest.js"
   },
   "devDependencies": {
-    "@types/mocha": "^9.1.1",
     "@types/node": "^16.x.x",
     "@types/node-fetch": "^2.6.1",
     "@types/vscode": "^1.60.0",

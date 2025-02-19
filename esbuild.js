@@ -10,16 +10,17 @@ const esbuildProblemMatcherPlugin = {
 	name: 'esbuild-problem-matcher',
 
 	setup(build) {
-		build.onStart(() => {
-			console.log('[watch] build started');
-		});
-		build.onEnd((result) => {
-			result.errors.forEach(({ text, location }) => {
-				console.error(`✘ [ERROR] ${text}`);
-				console.error(`    ${location.file}:${location.line}:${location.column}:`);
-			});
-			console.log('[watch] build finished');
-		});
+		// 删除这些调试日志
+		// build.onStart(() => {
+		//     console.log('[watch] build started');
+		// });
+		// build.onEnd((result) => {
+		//     result.errors.forEach(({ text, location }) => {
+		//         console.error(`✘ [ERROR] ${text}`);
+		//         console.error(`    ${location.file}:${location.line}:${location.column}:`);
+		//     });
+		//     console.log('[watch] build finished');
+		// });
 	},
 };
 
@@ -38,8 +39,8 @@ async function main() {
 		external: ['vscode'],
 		logLevel: 'silent',
 		plugins: [
-			/* add to the end of plugins array */
-			esbuildProblemMatcherPlugin,
+			// 删除调试插件
+			// esbuildProblemMatcherPlugin,
 		],
 	});
 	if (watch) {
@@ -51,6 +52,6 @@ async function main() {
 }
 
 main().catch(e => {
-	console.error(e);
+	// console.error('Build failed:', e);
 	process.exit(1);
 });

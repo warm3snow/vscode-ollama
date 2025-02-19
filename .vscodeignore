@@ -1,16 +1,11 @@
 .vscode/**
-.vscode-test/**
-src/**
 .gitignore
 .yarnrc
-esbuild.js
 vsc-extension-quickstart.md
 **/tsconfig.json
 **/eslint.config.mjs
 **/*.map
 **/*.ts
-**/.vscode-test.*
-**/.eslintrc.json
 node_modules/**
 !node_modules/node-fetch/**
 !node_modules/whatwg-url/**

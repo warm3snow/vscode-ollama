@@ -134,7 +134,6 @@ export function getSettingsWebviewContent(config: any): string {
                     performanceMode: document.getElementById('performanceMode').value
                 };
                 
-                // 保存到 VSCode 配置
                 vscode.postMessage({
                     command: 'saveSettings',
                     settings

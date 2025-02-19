@@ -18,7 +18,6 @@ export async function searchWeb(query: string): Promise<SearchResult[]> {
                 snippet: topic.Text
             }));
     } catch (error) {
-        console.error('Web search error:', error);
         return [];
     }
 } 
