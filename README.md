@@ -147,3 +147,11 @@ Your support helps maintain and improve this extension! Thank you! ❤️
 - 📝 Submit issues or feedback
 - 🚀 Contribute to the codebase
 - 💬 Share with your friends
+
+## 📝 Release Notes
+
+See [CHANGELOG.md](CHANGELOG.md) for release notes.
+
+## 📝 License
+
+This extension is licensed under the [MIT License](LICENSE).

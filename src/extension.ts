@@ -46,6 +46,8 @@ export function activate(context: vscode.ExtensionContext) {
 	channel.show();
 
 	try {
+		let panel: vscode.WebviewPanel | undefined;  // 声明在更高的作用域
+
 		// Get configuration function
 		function getOllamaConfig(): OllamaConfig {
 			const config = vscode.workspace.getConfiguration('vscode-ollama');
@@ -187,7 +189,12 @@ export function activate(context: vscode.ExtensionContext) {
 
 		// Register chat command
 		const chatCommand = vscode.commands.registerCommand('vscode-ollama.openChat', () => {
-			const panel = vscode.window.createWebviewPanel(
+			if (panel) {
+				panel.reveal(vscode.ViewColumn.One);
+				return;
+			}
+
+			panel = vscode.window.createWebviewPanel(
 				'ollamaChat',
 				'Ollama Chat',
 				vscode.ViewColumn.One,
@@ -203,6 +210,10 @@ export function activate(context: vscode.ExtensionContext) {
 			// 在 webview 准备好后立即发送模型名称
 			panel.webview.onDidReceiveMessage(
 				async message => {
+					if (!panel) {
+						return;
+					}
+
 					if (message.command === 'webviewReady') {
 						// 发送欢迎消息和模型名称
 						panel.webview.postMessage({
@@ -210,7 +221,7 @@ export function activate(context: vscode.ExtensionContext) {
 						});
 						panel.webview.postMessage({
 							command: 'updateModelName',
-							modelName: config.model // 发送当前配置的模型名称
+							modelName: config.model
 						});
 					} else if (message.command === 'sendMessage') {
 						try {
@@ -270,21 +281,27 @@ export function activate(context: vscode.ExtensionContext) {
 									const chunk = decoder.decode(value);
 									const lines = chunk.split('\n').filter(line => line.trim());
 									
+									if (!panel) {
+										return;
+									}
+
 									for (const line of lines) {
 										const data = JSON.parse(line) as OllamaChatResponse;
 										content += data.message.content;
 										
-										// 如果是新消息且上一条消息已完成，创建新的消息 div
+										if (!panel) {
+											return;
+										}
+
 										if (!lastMessageDiv) {
 											panel.webview.postMessage({
 												command: 'streamMessage',
 												content: data.message.content,
 												done: false,
-												newMessage: true  // 标记新消息开始
+												newMessage: true
 											});
 											lastMessageDiv = true;
 										} else {
-											// 继续追加到当前消息
 											panel.webview.postMessage({
 												command: 'streamMessage',
 												content: data.message.content,
@@ -293,7 +310,6 @@ export function activate(context: vscode.ExtensionContext) {
 											});
 										}
 
-										// 如果消息完成，重置标记
 										if (data.done) {
 											panel.webview.postMessage({
 												command: 'streamMessage',
@@ -307,12 +323,13 @@ export function activate(context: vscode.ExtensionContext) {
 								}
 							} catch (error: unknown) {
 								if (error instanceof Error && error.name === 'AbortError') {
-									// 正常的终止，不需要显示错误
-									panel.webview.postMessage({
-										command: 'streamMessage',
-										content: '\n[已终止生成]',
-										done: true
-									});
+									if (panel) {
+										panel.webview.postMessage({
+											command: 'streamMessage',
+											content: '\n[已终止生成]',
+											done: true
+										});
+									}
 								} else {
 									throw error;
 								}
@@ -320,19 +337,23 @@ export function activate(context: vscode.ExtensionContext) {
 								currentReader = null;
 							}
 
-							// 在发送新消息时也更新模型名称
-							panel.webview.postMessage({
-								command: 'updateModelName',
-								modelName: currentConfig.model
-							});
+							// 更新模型名称
+							if (panel) {
+								panel.webview.postMessage({
+									command: 'updateModelName',
+									modelName: currentConfig.model
+								});
+							}
 						} catch (error) {
 							const errorMessage = error instanceof Error ? error.message : String(error);
 							vscode.window.showErrorMessage(`Chat error: ${errorMessage}`);
-							panel.webview.postMessage({
-								command: 'streamMessage',
-								content: `\n[错误: ${errorMessage}]`,
-								done: true
-							});
+							if (panel) {
+								panel.webview.postMessage({
+									command: 'streamMessage',
+									content: `\n[错误: ${errorMessage}]`,
+									done: true
+								});
+							}
 						}
 					} else if (message.command === 'stopGeneration') {
 						if (currentReader) {
@@ -341,27 +362,45 @@ export function activate(context: vscode.ExtensionContext) {
 						}
 					} else if (message.command === 'toggleTheme') {
 						try {
-							// 应用新主题
-							await vscode.workspace.getConfiguration('workbench').update(
+							// 获取当前主题配置
+							const workbenchConfig = vscode.workspace.getConfiguration('workbench');
+							const currentTheme = workbenchConfig.get<string>('colorTheme');
+							
+							// 使用 VS Code 的主题 kind 来判断当前主题
+							const currentKind = vscode.window.activeColorTheme.kind;
+							const isDark = currentKind === vscode.ColorThemeKind.Dark;
+							
+							// 根据当前主题状态切换
+							const newTheme = isDark ? 'Light+ (default light)' : 'Dark+ (default dark)';
+							
+							// 更新主题配置
+							await workbenchConfig.update(
 								'colorTheme',
-								message.theme === 'dark' ? 'Default Dark+' : 'Default Light+',
+								newTheme,
 								vscode.ConfigurationTarget.Global
 							);
-							
-							// 通知 webview 主题已更改
-							panel.webview.postMessage({
-								command: 'themeChanged',
-								isDark: message.theme === 'dark'
-							});
+
+							// 发送主题变化消息
+							if (panel) {
+								panel.webview.postMessage({
+									command: 'themeChanged',
+									isDark: !isDark // 切换后的状态
+								});
+							}
 						} catch (error) {
 							console.error('Failed to toggle theme:', error);
-							vscode.window.showErrorMessage('Failed to toggle theme');
+							vscode.window.showErrorMessage('主题切换失败');
 						}
 					}
 				},
 				undefined,
 				context.subscriptions
 			);
+
+			// 当面板关闭时清除引用
+			panel.onDidDispose(() => {
+				panel = undefined;
+			}, null, context.subscriptions);
 		});
 
 		// Add all commands to the context subscriptions
@@ -369,6 +408,18 @@ export function activate(context: vscode.ExtensionContext) {
 		context.subscriptions.push(testConnectionCommand);
 		context.subscriptions.push(refreshModelsCommand);
 		context.subscriptions.push(chatCommand);
+
+		// 添加主题变化监听
+		context.subscriptions.push(
+			vscode.window.onDidChangeActiveColorTheme(theme => {
+				if (panel) {
+					panel.webview.postMessage({
+						command: 'themeChanged',
+						isDark: theme.kind === vscode.ColorThemeKind.Dark
+					});
+				}
+			})
+		);
 
 		// 确认激活完成
 		channel.appendLine('vscode-ollama extension activated successfully');

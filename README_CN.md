@@ -6,16 +6,16 @@
 
 <p align="center">
   <a href="https://marketplace.visualstudio.com/items?itemName=warm3snow.vscode-ollama">
-    <img src="https://img.shields.io/visual-studio-marketplace/i/warm3snow.vscode-ollama?logo=visual-studio-code" alt="安装量"/>
+    <img src="https://img.shields.io/visual-studio-marketplace/i/warm3snow.vscode-ollama?logo=visual-studio-code" alt="Downloads"/>
   </a>
   <a href="https://marketplace.visualstudio.com/items?itemName=warm3snow.vscode-ollama">
-    <img src="https://img.shields.io/visual-studio-marketplace/r/warm3snow.vscode-ollama?logo=visual-studio-code" alt="评分"/>
+    <img src="https://img.shields.io/visual-studio-marketplace/r/warm3snow.vscode-ollama?logo=visual-studio-code" alt="Rating"/>
   </a>
   <a href="https://github.com/warm3snow/vscode-ollama">
     <img src="https://img.shields.io/github/stars/warm3snow/vscode-ollama?style=social" alt="GitHub stars"/>
   </a>
   <a href="https://github.com/warm3snow/vscode-ollama/blob/main/LICENSE">
-    <img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="许可证: MIT"/>
+    <img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"/>
   </a>
 </p>
 
@@ -154,3 +154,11 @@ VSCode Ollama 是一个强大的 Visual Studio Code 扩展，它将 Ollama 的�
 - 📝 提交问题或反馈意见
 - 🚀 为代码库做贡献
 - 💬 分享给你的朋友们
+
+## 📝 发布说明
+
+查看 [CHANGELOG.md](CHANGELOG.md) 获取发布说明。
+
+## 📝 许可证
+
+本扩展基于 [MIT 许可证](LICENSE) 授权。

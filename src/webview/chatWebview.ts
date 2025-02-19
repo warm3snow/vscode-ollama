@@ -265,15 +265,14 @@ export function getChatWebviewContent(config: any): string {
                 background: var(--vscode-list-hoverBackground);
             }
 
+            .menu-item.active {
+                color: var(--vscode-textLink-foreground);
+            }
+
             .menu-separator {
                 height: 1px;
                 background-color: var(--vscode-dropdown-border);
                 margin: 4px 0;
-            }
-
-            /* 当前主题项的样式 */
-            .menu-item.active {
-                color: var(--vscode-textLink-foreground);
             }
 
             /* 美化聊天容器边框 */
@@ -1071,35 +1070,49 @@ export function getChatWebviewContent(config: any): string {
                 });
             }
 
-            // 添加主题切换相关代码
+            // 修改主题切换相关代码
             const themeLightItem = document.getElementById('theme-light');
             const themeDarkItem = document.getElementById('theme-dark');
 
             // 更新主题菜单项状态
             function updateThemeMenuState(isDark) {
+                if (!themeLightItem || !themeDarkItem) {
+                    return;
+                }
+                
+                // 更新菜单项状态
                 themeLightItem.classList.toggle('active', !isDark);
                 themeDarkItem.classList.toggle('active', isDark);
             }
 
             // 初始化主题状态
-            updateThemeMenuState(document.body.classList.contains('vscode-dark'));
+            const isDarkTheme = document.body.classList.contains('vscode-dark');
+            updateThemeMenuState(isDarkTheme);
 
             // 添加主题切换事件监听
-            themeLightItem.addEventListener('click', () => {
-                vscode.postMessage({
-                    command: 'toggleTheme',
-                    theme: 'light'
-                });
-                menu.classList.remove('show');
-            });
+            if (themeLightItem) {
+                themeLightItem.onclick = (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    vscode.postMessage({
+                        command: 'toggleTheme',
+                        theme: 'light'
+                    });
+                    menu.classList.remove('show');
+                };
+            }
 
-            themeDarkItem.addEventListener('click', () => {
-                vscode.postMessage({
-                    command: 'toggleTheme',
-                    theme: 'dark'
-                });
-                menu.classList.remove('show');
-            });
+            if (themeDarkItem) {
+                themeDarkItem.onclick = (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    vscode.postMessage({
+                        command: 'toggleTheme',
+                        theme: 'dark'
+                    });
+                    menu.classList.remove('show');
+                };
+            }
 
             // 监听主题变化消息
             window.addEventListener('message', event => {
