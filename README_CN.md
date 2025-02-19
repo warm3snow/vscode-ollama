@@ -49,10 +49,6 @@ VSCode Ollama 是一个强大的 Visual Studio Code 扩展，它将 Ollama 的�
 
 ## 📺 使用教程
 
-观看快速入门视频教程：
-
-<video src="resources/tutorial.mp4" width="100%"></video>
-
 1. **安装 Ollama**
    ```bash
    # macOS
@@ -77,6 +73,10 @@ VSCode Ollama 是一个强大的 Visual Studio Code 扩展，它将 Ollama 的�
    - 在聊天界面选择模型
    - 开启/关闭联网搜索
    - 发送消息开始交互
+
+   <p align="center">
+     <img src="resources/chat.png" alt="VSCode Ollama 聊天界面" width="800"/>
+   </p>
 
 ## 📝 使用说明
 

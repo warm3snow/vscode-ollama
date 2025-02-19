@@ -49,10 +49,6 @@ VSCode Ollama is a powerful Visual Studio Code extension that seamlessly integra
 
 ## 📺 Tutorial
 
-Watch this quick tutorial to get started:
-
-<video src="resources/tutorial.mp4" width="100%"></video>
-
 1. **Install Ollama**
    ```bash
    # macOS
@@ -77,6 +73,10 @@ Watch this quick tutorial to get started:
    - Select model in chat interface
    - Toggle web search
    - Send message to interact
+
+   <p align="center">
+     <img src="resources/chat.png" alt="VSCode Ollama Chat Interface" width="800"/>
+   </p>
 
 ## 📝 Usage
 
