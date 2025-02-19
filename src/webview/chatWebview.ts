@@ -526,6 +526,11 @@ export function getChatWebviewContent(config: any): string {
 
         <script>
             const vscode = acquireVsCodeApi();
+            let webSearchEnabled = false;
+            let isGenerating = false;
+            let currentModelName = 'Assistant';
+
+            // Initialize UI elements
             const chatContainer = document.getElementById('chat-container');
             const messageInput = document.getElementById('message-input');
             const webSearchButton = document.getElementById('web-search');
@@ -533,15 +538,57 @@ export function getChatWebviewContent(config: any): string {
             const menuButton = document.getElementById('menu-button');
             const menu = document.getElementById('menu');
             const clearChatButton = document.getElementById('clear-chat');
-            let webSearchEnabled = false;
-            let isGenerating = false;
-            let currentModelName = 'Assistant'; // 默认值
 
-            // 恢复对话历史
-            const state = vscode.getState() || { messages: [] };
-            state.messages.forEach(msg => {
-                appendMessage(msg.content, msg.isUser);
-            });
+            // Log initialization
+            console.log('Webview initialized');
+            console.log('Initial web search state:', webSearchEnabled);
+
+            // Web search button click handler
+            webSearchButton.onclick = () => {
+                webSearchEnabled = !webSearchEnabled;
+                webSearchButton.classList.toggle('active', webSearchEnabled);
+                const status = webSearchButton.querySelector('.status');
+                if (status) {
+                    status.style.color = webSearchEnabled ? '#4CAF50' : '#666';
+                }
+                console.log('Web search toggled:', webSearchEnabled);
+            };
+
+            // Send message function
+            function sendMessage() {
+                const content = messageInput.value.trim();
+                if (!content) return;
+
+                console.log('Preparing to send message:', {
+                    content,
+                    webSearch: webSearchEnabled
+                });
+
+                appendMessage(content, true);
+                messageInput.value = '';
+                messageInput.style.height = 'auto';
+                updateSendButton(true);
+
+                vscode.postMessage({
+                    command: 'sendMessage',
+                    content,
+                    webSearch: webSearchEnabled,
+                    resetContext: false
+                });
+            }
+
+            // Send button click handler
+            sendButton.onclick = () => {
+                if (!isGenerating) {
+                    console.log('Sending message with web search:', webSearchEnabled);
+                    sendMessage();
+                } else {
+                    vscode.postMessage({
+                        command: 'stopGeneration'
+                    });
+                    updateSendButton(false);
+                }
+            };
 
             // 菜单按钮点击事件
             menuButton.onclick = (e) => {
@@ -598,28 +645,6 @@ export function getChatWebviewContent(config: any): string {
                 // 重置状态
                 vscode.setState({ messages: [] });
                 menu.classList.remove('show');
-            };
-
-            // 发送按钮点击事件
-            sendButton.onclick = () => {
-                if (!isGenerating) {
-                    sendMessage();
-                } else {
-                    vscode.postMessage({
-                        command: 'stopGeneration'
-                    });
-                    updateSendButton(false);
-                }
-            };
-
-            // 联网搜索按钮点击事件
-            webSearchButton.onclick = () => {
-                webSearchEnabled = !webSearchEnabled;
-                webSearchButton.classList.toggle('active', webSearchEnabled);
-                const status = webSearchButton.querySelector('.status');
-                if (status) {
-                    status.style.color = webSearchEnabled ? '#4CAF50' : '#666';
-                }
             };
 
             // 修改命令定义
@@ -795,38 +820,6 @@ export function getChatWebviewContent(config: any): string {
                 sendButton.classList.toggle('sending', generating);
             }
 
-            async function sendMessage() {
-                const content = messageInput.value.trim();
-                if (!content) return;
-
-                // 检查是否是命令
-                if (content.startsWith('/')) {
-                    const commandName = content.split(' ')[0];
-                    const command = commands.find(cmd => cmd.name === commandName);
-                    if (command) {
-                        appendMessage(content, true); // 添加用户输入到聊天记录
-                        messageInput.value = '';
-                        messageInput.style.height = 'auto';
-                        command.execute();
-                        return;
-                    }
-                    // 如果不是有效命令，作为普通消息发送
-                }
-
-                // 常规消息发送逻辑
-                appendMessage(content, true);
-                messageInput.value = '';
-                messageInput.style.height = 'auto';
-                updateSendButton(true);
-
-                vscode.postMessage({
-                    command: 'sendMessage',
-                    content,
-                    webSearch: webSearchEnabled,
-                    modelName: currentModelName
-                });
-            }
-
             function processThinkTags(content) {
                 const thinkRegex = /<think>([\\s\\S]*?)<\\/think>/g;
                 let lastIndex = 0;
@@ -930,6 +923,7 @@ export function getChatWebviewContent(config: any): string {
                 vscode.setState(state);
             }
 
+            // Message event listener
             window.addEventListener('message', event => {
                 const message = event.data;
                 if (message.command === 'resetChat') {
@@ -1044,15 +1038,12 @@ export function getChatWebviewContent(config: any): string {
                 }
             });
 
-            // 在 webview 加载完成时请求模型名称
+            // Initialize on load
             window.addEventListener('load', () => {
                 vscode.postMessage({
                     command: 'webviewReady'
                 });
             });
-
-            // 在页面加载时创建命令提示元素
-            createCommandSuggestions();
 
             // 更新选中状态
             function updateSelection() {

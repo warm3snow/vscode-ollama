@@ -36,6 +36,9 @@ let settingsPanel: vscode.WebviewPanel | undefined = undefined;
 let currentReader: ReadableStreamDefaultReader<Uint8Array> | null = null;
 let lastMessageDiv: boolean = false;
 
+// 在文件开头添加默认搜索引擎配置
+const DEFAULT_SEARCH_PROVIDER = 'baidu';
+
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
 export function activate(context: vscode.ExtensionContext) {
@@ -191,7 +194,9 @@ export function activate(context: vscode.ExtensionContext) {
 				vscode.ViewColumn.One,
 				{
 					enableScripts: true,
-					retainContextWhenHidden: true
+					retainContextWhenHidden: true,
+					enableFindWidget: true,
+					enableCommandUris: true
 				}
 			);
 
@@ -217,22 +222,52 @@ export function activate(context: vscode.ExtensionContext) {
 					} else if (message.command === 'sendMessage') {
 						try {
 							const currentConfig = getOllamaConfig();
+							const searchProvider = vscode.workspace.getConfiguration('vscode-ollama').get('searchProvider', DEFAULT_SEARCH_PROVIDER);
+							
+							console.log('Message received:', {
+								content: message.content,
+								webSearch: message.webSearch,
+								searchProvider,
+								rawMessage: message
+							});
+
 							const messages = message.resetContext ? [] : [
 								{ role: 'system', content: 'You are a helpful assistant.' }
 							];
 
 							if (message.webSearch) {
-								const searchResults = await searchWeb(message.content);
-								if (searchResults.length > 0) {
-									const searchContext = `Web search results for "${message.content}":\n\n` + 
-										searchResults.map((result, index) => 
-											`[${index + 1}] ${result.title}\nURL: ${result.url}\n${result.snippet}\n`
-										).join('\n');
+								try {
+									console.log('Starting web search...');
+									const searchResults = await searchWeb(searchProvider, message.content);
+									console.log('Search results received:', searchResults);
 
-									messages.push({ 
-										role: 'system', 
-										content: `Here are the latest web search results:\n${searchContext}\n\n` +
-												`Please use this information to help answer the user's question.`
+									if (searchResults.length > 0) {
+										const searchContext = `Web search results for "${message.content}":\n\n` + 
+											searchResults.map((result, index) => 
+												`[${index + 1}] ${result.title}\nURL: ${result.url}\n${result.snippet}\n`
+											).join('\n');
+
+										console.log('Search context created:', searchContext);
+
+										messages.push({ 
+											role: 'system', 
+											content: `Here are the latest web search results:\n${searchContext}\n\n` +
+													`Please use this information to help answer the user's question.`
+										});
+									} else {
+										console.log('No search results found');
+										// 可以选择通知用户搜索未返回结果
+										panel.webview.postMessage({
+											command: 'searchStatus',
+											status: 'No results found'
+										});
+									}
+								} catch (error) {
+									console.error('Web search failed:', error);
+									// 通知用户搜索失败
+									panel.webview.postMessage({
+										command: 'searchStatus',
+										status: 'Search failed'
 									});
 								}
 							}

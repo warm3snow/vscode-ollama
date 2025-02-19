@@ -74,6 +74,25 @@
             "Low Latency"
           ],
           "description": "Performance mode setting"
+        },
+        "vscode-ollama.searchProvider": {
+          "type": "string",
+          "default": "baidu",
+          "enum": [
+            "baidu",
+            "duckduckgo",
+            "brave",
+            "searxng",
+            "brave-api",
+            "sogou",
+            "google"
+          ],
+          "description": "Select the search engine provider for web search"
+        },
+        "vscode-ollama.enableDevTools": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable developer tools for debugging"
         }
       }
     }
