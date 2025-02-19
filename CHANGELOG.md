@@ -7,10 +7,9 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 ## [1.0.1] - 2025-02-18
 
 ### Added
-- Theme switching functionality
-  - Quick theme toggle through menu (Light/Dark)
-  - Real-time theme state synchronization
-  - Enhanced visual feedback for theme changes
+- Additional features in the `...`menu
+  - Theme switching functionality (Coming Soon!!!)
+  - Chat history clear
 
 ### Changed
 - Improved chat interface styling
@@ -28,7 +27,7 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 ### Initial Release
 - Local Ollama service integration
 - Multiple LLM model configuration support
-- Web search capability
+- Web search capability (Coming Soon!!!)
 - Intuitive chat interface
 - Model configuration and performance mode settings
 
