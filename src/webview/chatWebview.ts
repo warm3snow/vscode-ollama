@@ -8,6 +8,35 @@ export function getChatWebviewContent(config: any): string {
     // const markedPath = path.join(__dirname, '..', 'lib', 'marked.min.js');
     // const marked = fs.readFileSync(markedPath, 'utf-8');
 
+    // Define the processMessage function as a string
+    const processMessageFn = `
+        function processMessage(content) {
+            // 1. 处理转义字符，保留换行符
+            content = content.replace(/\\\\u003c/g, '<')
+                           .replace(/\\\\u003e/g, '>')
+                           .replace(/\\\\n/g, '\\n');
+            
+            // 2. 处理思考标签
+            content = content.replace(/<think>([\\\\s\\\\S]*?)<\\/think>/g, (match, p1) => {
+                const html = [
+                    '<div class="think-section">',
+                    '    <div class="think-header" onclick="toggleThink(this)">',
+                    '        <span class="think-toggle">▼</span>',
+                    '        <span>思考过程</span>',
+                    '    </div>',
+                    '    <div class="think-content">' + p1 + '</div>',
+                    '</div>'
+                ].join('\\n');
+                return html;
+            });
+
+            // 3. 将换行符转换为 <br> 标签
+            content = content.replace(/\\n/g, '<br>');
+            
+            return content;
+        }
+    `;
+
     return `<!DOCTYPE html>
     <html>
     <head>
@@ -328,51 +357,11 @@ export function getChatWebviewContent(config: any): string {
                 padding: 8px;
             }
 
-            .think-section {
-                margin: 10px 0;
-                background: var(--vscode-editor-inactiveSelectionBackground);
-                border-radius: 6px;
-                overflow: hidden;
-            }
-
-            .think-header {
-                display: flex;
-                align-items: center;
-                gap: 8px;
-                padding: 8px 12px;
-                cursor: pointer;
-                user-select: none;
-                color: var(--vscode-textLink-foreground);
-                font-size: 0.9em;
-            }
-
-            .think-header:hover {
-                background: var(--vscode-list-hoverBackground);
-            }
-
-            .think-toggle {
-                display: inline-block;
-                width: 12px;
-                height: 12px;
-                text-align: center;
-                line-height: 12px;
-                transition: transform 0.2s;
-            }
-
+            .think-section,
+            .think-header,
+            .think-toggle,
             .think-content {
-                padding: 12px;
-                white-space: pre-wrap;
-                font-family: var(--vscode-editor-font-family);
-                line-height: 1.5;
-                border-top: 1px solid var(--vscode-input-border);
-            }
-
-            .think-content.collapsed {
                 display: none;
-            }
-
-            .think-header.collapsed .think-toggle {
-                transform: rotate(-90deg);
             }
 
             /* 命令提示样式 */
@@ -529,9 +518,43 @@ export function getChatWebviewContent(config: any): string {
             let webSearchEnabled = false;
             let isGenerating = false;
             let currentModelName = 'Assistant';
+            let chatContainer;
+
+            // Initialize when DOM is ready
+            document.addEventListener('DOMContentLoaded', () => {
+                chatContainer = document.getElementById('chat-container');
+            });
+
+            ${processMessageFn}
+
+            function appendMessage(content, isUser) {
+                let currentGroup = chatContainer.lastElementChild;
+                if (!currentGroup || !currentGroup.classList.contains('conversation-group')) {
+                    currentGroup = document.createElement('div');
+                    currentGroup.className = 'conversation-group';
+                    chatContainer.appendChild(currentGroup);
+                }
+
+                const messageDiv = document.createElement('div');
+                messageDiv.className = 'message ' + (isUser ? 'user-message' : 'assistant-message');
+                
+                const prefixDiv = document.createElement('div');
+                prefixDiv.className = 'message-prefix';
+                prefixDiv.textContent = isUser ? '- 我' : '- ' + currentModelName;
+                messageDiv.appendChild(prefixDiv);
+                
+                const contentDiv = document.createElement('div');
+                contentDiv.className = 'message-content';
+                
+                // 使用 innerHTML 而不是 textContent 来保留 HTML 标签
+                contentDiv.innerHTML = processMessage(content);
+                
+                messageDiv.appendChild(contentDiv);
+                currentGroup.appendChild(messageDiv);
+                chatContainer.scrollTop = chatContainer.scrollHeight;
+            }
 
             // Initialize UI elements
-            const chatContainer = document.getElementById('chat-container');
             const messageInput = document.getElementById('message-input');
             const webSearchButton = document.getElementById('web-search');
             const sendButton = document.getElementById('send-button');
@@ -820,104 +843,6 @@ export function getChatWebviewContent(config: any): string {
                 sendButton.classList.toggle('sending', generating);
             }
 
-            function processThinkTags(content) {
-                const thinkRegex = /<think>([\\s\\S]*?)<\\/think>/g;
-                let lastIndex = 0;
-                let result = '';
-                let match;
-                let thinkCount = 0;
-
-                while ((match = thinkRegex.exec(content)) !== null) {
-                    result += content.slice(lastIndex, match.index);
-                    
-                    const thinkContent = match[1].trim();
-                    result += \`
-                        <div class="think-section">
-                            <div class="think-header" onclick="toggleThink(this)">
-                                <span class="think-toggle">▼</span>
-                                <span>思考过程 #\${++thinkCount}</span>
-                            </div>
-                            <div class="think-content">\${thinkContent}</div>
-                        </div>
-                    \`;
-                    
-                    lastIndex = match.index + match[0].length;
-                }
-
-                result += content.slice(lastIndex);
-                return result;
-            }
-
-            function toggleThink(header) {
-                const content = header.nextElementSibling;
-                content.classList.toggle('collapsed');
-                header.classList.toggle('collapsed');
-            }
-
-            function processMessage(content) {
-                content = processThinkTags(content);
-                
-                try {
-                    content = content.replace(/<div class="think-section">([\\s\\S]*?)<\\/div>/g, match => 
-                        \`<!--think-section-start-->\${match}<!--think-section-end-->\`
-                    );
-                    
-                    content = marked.parse(content, {
-                        gfm: true,
-                        breaks: true,
-                        sanitize: false
-                    });
-                    
-                    content = content.replace(/<!--think-section-start-->([\\s\\S]*?)<!--think-section-end-->/g, '$1');
-                } catch (e) {
-                    console.error('Markdown parsing error:', e);
-                }
-                
-                return content;
-            }
-
-            function appendMessage(content, isUser) {
-                let currentGroup;
-                if (isUser) {
-                    currentGroup = document.createElement('div');
-                    currentGroup.className = 'conversation-group';
-                    chatContainer.appendChild(currentGroup);
-                } else {
-                    currentGroup = chatContainer.lastElementChild;
-                    if (!currentGroup || !currentGroup.classList.contains('conversation-group')) {
-                        currentGroup = document.createElement('div');
-                        currentGroup.className = 'conversation-group';
-                        chatContainer.appendChild(currentGroup);
-                    }
-                }
-
-                const messageDiv = document.createElement('div');
-                messageDiv.className = \`message \${isUser ? 'user-message' : 'assistant-message'}\`;
-                
-                const prefixDiv = document.createElement('div');
-                prefixDiv.className = 'message-prefix';
-                prefixDiv.textContent = isUser ? '- 我' : \`- \${currentModelName}\`;
-                messageDiv.appendChild(prefixDiv);
-                
-                const contentDiv = document.createElement('div');
-                contentDiv.className = 'message-content';
-                if (isUser) {
-                    contentDiv.textContent = content;
-                } else {
-                    contentDiv.className += ' markdown-content';
-                    const processedContent = content.replace(/\s+/g, ' ').trim();
-                    contentDiv.innerHTML = processMessage(processedContent);
-                }
-                messageDiv.appendChild(contentDiv);
-                
-                currentGroup.appendChild(messageDiv);
-                chatContainer.scrollTop = chatContainer.scrollHeight;
-
-                const state = vscode.getState() || { messages: [] };
-                state.messages.push({ content, isUser });
-                vscode.setState(state);
-            }
-
             // Message event listener
             window.addEventListener('message', event => {
                 const message = event.data;
@@ -928,46 +853,42 @@ export function getChatWebviewContent(config: any): string {
                         msg.classList.remove('streaming');
                     });
                 } else if (message.command === 'streamMessage') {
+                    console.log('Stream message content:', {
+                        content: message.content,
+                        newMessage: message.newMessage,
+                        done: message.done
+                    });
+                    
                     if (!message.done) {
                         if (message.newMessage) {
                             let currentGroup = chatContainer.lastElementChild;
-                            
-                            // 确保消息在正确的对话组中
                             if (!currentGroup || !currentGroup.classList.contains('conversation-group')) {
                                 currentGroup = document.createElement('div');
                                 currentGroup.className = 'conversation-group';
                                 chatContainer.appendChild(currentGroup);
                             }
 
-                            // 创建新的消息 div
                             const messageDiv = document.createElement('div');
                             messageDiv.className = 'message assistant-message streaming';
                             
-                            // 添加前缀
                             const prefixDiv = document.createElement('div');
                             prefixDiv.className = 'message-prefix';
                             prefixDiv.textContent = \`- \${currentModelName}\`;
                             messageDiv.appendChild(prefixDiv);
 
-                            // 添加内容容器
                             const contentDiv = document.createElement('div');
                             contentDiv.className = 'message-content';
                             contentDiv.textContent = message.content;
                             messageDiv.appendChild(contentDiv);
                             
                             currentGroup.appendChild(messageDiv);
-                            chatContainer.scrollTop = chatContainer.scrollHeight;
                         } else {
                             const streamingDiv = document.querySelector('.message.assistant-message.streaming');
                             if (streamingDiv) {
                                 const contentDiv = streamingDiv.querySelector('.message-content');
                                 if (contentDiv) {
-                                    contentDiv.className = 'message-content markdown-content';
-                                    const currentContent = contentDiv.innerHTML || '';
-                                    const newContent = message.content;
-                                    const processedContent = (currentContent + newContent).replace(/\s+/g, ' ').trim();
-                                    contentDiv.innerHTML = processMessage(processedContent);
-                                    chatContainer.scrollTop = chatContainer.scrollHeight;
+                                    const currentContent = contentDiv.textContent || '';
+                                    contentDiv.textContent = currentContent + message.content;
                                 }
                             }
                         }
@@ -980,7 +901,7 @@ export function getChatWebviewContent(config: any): string {
                             const contentDiv = streamingDiv.querySelector('.message-content');
                             if (contentDiv) {
                                 state.messages.push({ 
-                                    content: contentDiv.innerHTML, 
+                                    content: contentDiv.textContent, 
                                     isUser: false 
                                 });
                                 vscode.setState(state);
