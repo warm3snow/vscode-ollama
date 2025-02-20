@@ -14,7 +14,7 @@ export function getChatWebviewContent(config: any): string {
             // 1. 处理转义字符，保留换行符
             content = content.replace(/\\\\u003c/g, '<')
                            .replace(/\\\\u003e/g, '>')
-                           .replace(/\\\\n/g, '\\n');
+                           .replace(/\\n/g, '<br>');
             
             // 2. 处理思考标签
             content = content.replace(/<think>([\\\\s\\\\S]*?)<\\/think>/g, (match, p1) => {
@@ -24,14 +24,11 @@ export function getChatWebviewContent(config: any): string {
                     '        <span class="think-toggle">▼</span>',
                     '        <span>思考过程</span>',
                     '    </div>',
-                    '    <div class="think-content">' + p1 + '</div>',
+                    '    <div class="think-content">' + p1.replace(/\\n/g, '<br>') + '</div>',
                     '</div>'
-                ].join('\\n');
+                ].join('');
                 return html;
             });
-
-            // 3. 将换行符转换为 <br> 标签
-            content = content.replace(/\\n/g, '<br>');
             
             return content;
         }
@@ -75,6 +72,8 @@ export function getChatWebviewContent(config: any): string {
             }
             .message-content {
                 margin-left: 8px;
+                white-space: pre-wrap;
+                word-wrap: break-word;
             }
             .user-message {
                 color: var(--vscode-foreground);
@@ -169,6 +168,8 @@ export function getChatWebviewContent(config: any): string {
             .think-content {
                 margin: 8px 0;
                 padding: 8px 12px;
+                white-space: pre-wrap;
+                word-wrap: break-word;
                 background: var(--vscode-textBlockQuote-background);
                 border-left: 3px solid var(--vscode-textBlockQuote-border);
                 font-size: 0.9em;
