@@ -3,6 +3,13 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { marked } from 'marked';
 
+// 在文件顶部添加类型声明
+declare global {
+    interface Window {
+        toggleThink: (header: HTMLElement) => void;
+    }
+}
+
 export function getChatWebviewContent(config: any): string {
     // Remove the file reading code
     // const markedPath = path.join(__dirname, '..', 'lib', 'marked.min.js');
@@ -11,26 +18,97 @@ export function getChatWebviewContent(config: any): string {
     // Define the processMessage function as a string
     const processMessageFn = `
         function processMessage(content) {
-            // 1. 处理转义字符，保留换行符
+            // 1. 处理转义字符和换行
             content = content.replace(/\\\\u003c/g, '<')
                            .replace(/\\\\u003e/g, '>')
                            .replace(/\\n/g, '<br>');
             
             // 2. 处理思考标签
             content = content.replace(/<think>([\\\\s\\\\S]*?)<\\/think>/g, (match, p1) => {
+                // 生成唯一ID
+                const thinkId = 'think-' + Math.random().toString(36).substr(2, 9);
+                
                 const html = [
                     '<div class="think-section">',
-                    '    <div class="think-header" onclick="toggleThink(this)">',
+                    '    <div class="think-header" data-think-id="' + thinkId + '">',
                     '        <span class="think-toggle">▼</span>',
                     '        <span>思考过程</span>',
                     '    </div>',
-                    '    <div class="think-content">' + p1.replace(/\\n/g, '<br>') + '</div>',
+                    '    <div class="think-content" id="' + thinkId + '">' + p1.replace(/\\n/g, '<br>') + '</div>',
                     '</div>'
                 ].join('');
+
+                // 确保在下一个事件循环中初始化这个think section
+                setTimeout(() => initThinkSection(thinkId), 0);
+                
                 return html;
             });
             
             return content;
+        }
+
+        // 初始化单个think section
+        function initThinkSection(thinkId) {
+            const header = document.querySelector('[data-think-id="' + thinkId + '"]');
+            const content = document.getElementById(thinkId);
+            
+            if (!header || !content) return;
+            
+            if (!header.hasAttribute('data-initialized')) {
+                header.setAttribute('data-initialized', 'true');
+                
+                header.addEventListener('click', function() {
+                    content.classList.toggle('collapsed');
+                    header.classList.toggle('collapsed');
+                    
+                    const toggle = header.querySelector('.think-toggle');
+                    if (toggle) {
+                        toggle.textContent = content.classList.contains('collapsed') ? '▶' : '▼';
+                    }
+                });
+            }
+        }
+
+        // 初始化所有think sections
+        function initAllThinkSections() {
+            const headers = document.querySelectorAll('.think-header[data-think-id]');
+            headers.forEach(header => {
+                const thinkId = header.getAttribute('data-think-id');
+                if (thinkId) {
+                    initThinkSection(thinkId);
+                }
+            });
+        }
+    `;
+
+    // 修改 appendMessage 函数
+    const appendMessageFn = `
+        function appendMessage(content, isUser) {
+            let currentGroup = chatContainer.lastElementChild;
+            if (!currentGroup || !currentGroup.classList.contains('conversation-group')) {
+                currentGroup = document.createElement('div');
+                currentGroup.className = 'conversation-group';
+                chatContainer.appendChild(currentGroup);
+            }
+
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message ' + (isUser ? 'user-message' : 'assistant-message');
+            
+            const prefixDiv = document.createElement('div');
+            prefixDiv.className = 'message-prefix';
+            prefixDiv.textContent = isUser ? '- 我' : '- ' + currentModelName;
+            messageDiv.appendChild(prefixDiv);
+            
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'message-content';
+            contentDiv.innerHTML = processMessage(content);
+            
+            messageDiv.appendChild(contentDiv);
+            currentGroup.appendChild(messageDiv);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+
+            // 初始化新添加消息中的思考部分
+            initAllThinkSections();
         }
     `;
 
@@ -475,6 +553,60 @@ export function getChatWebviewContent(config: any): string {
                 90% { opacity: 1; transform: translateY(0); }
                 100% { opacity: 0; transform: translateY(-20px); }
             }
+
+            .think-section {
+                margin: 10px 0;
+                background: var(--vscode-editor-inactiveSelectionBackground);
+                border-radius: 6px;
+                overflow: hidden;
+            }
+
+            .think-header {
+                padding: 8px 12px;
+                cursor: pointer;
+                user-select: none;
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                color: var(--vscode-textLink-foreground);
+                font-size: 0.9em;
+                background: var(--vscode-editor-background);
+            }
+
+            .think-header:hover {
+                background: var(--vscode-list-hoverBackground);
+            }
+
+            .think-toggle {
+                display: inline-block;
+                transition: transform 0.2s;
+                font-family: monospace;
+                width: 12px;
+                text-align: center;
+            }
+
+            .think-content {
+                padding: 12px;
+                border-top: 1px solid var(--vscode-input-border);
+                white-space: pre-wrap;
+                word-wrap: break-word;
+                transition: all 0.3s ease;
+                max-height: 1000px;
+                overflow: hidden;
+                opacity: 1;
+            }
+
+            .think-content.collapsed {
+                max-height: 0;
+                padding-top: 0;
+                padding-bottom: 0;
+                opacity: 0;
+                border-top: none;
+            }
+
+            .think-header.collapsed .think-toggle {
+                transform: rotate(-90deg);
+            }
         </style>
         <script>
             // Import marked from CDN instead
@@ -524,36 +656,12 @@ export function getChatWebviewContent(config: any): string {
             // Initialize when DOM is ready
             document.addEventListener('DOMContentLoaded', () => {
                 chatContainer = document.getElementById('chat-container');
+                // 初始化所有已存在的think sections
+                initAllThinkSections();
             });
 
             ${processMessageFn}
-
-            function appendMessage(content, isUser) {
-                let currentGroup = chatContainer.lastElementChild;
-                if (!currentGroup || !currentGroup.classList.contains('conversation-group')) {
-                    currentGroup = document.createElement('div');
-                    currentGroup.className = 'conversation-group';
-                    chatContainer.appendChild(currentGroup);
-                }
-
-                const messageDiv = document.createElement('div');
-                messageDiv.className = 'message ' + (isUser ? 'user-message' : 'assistant-message');
-                
-                const prefixDiv = document.createElement('div');
-                prefixDiv.className = 'message-prefix';
-                prefixDiv.textContent = isUser ? '- 我' : '- ' + currentModelName;
-                messageDiv.appendChild(prefixDiv);
-                
-                const contentDiv = document.createElement('div');
-                contentDiv.className = 'message-content';
-                
-                // 使用 innerHTML 而不是 textContent 来保留 HTML 标签
-                contentDiv.innerHTML = processMessage(content);
-                
-                messageDiv.appendChild(contentDiv);
-                currentGroup.appendChild(messageDiv);
-                chatContainer.scrollTop = chatContainer.scrollHeight;
-            }
+            ${appendMessageFn}
 
             // Initialize UI elements
             const messageInput = document.getElementById('message-input');
