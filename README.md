@@ -30,7 +30,7 @@ VSCode Ollama is a powerful Visual Studio Code extension that seamlessly integra
   - Multiple model switching support
   - Low-latency responses
 
-- 🔍 **Web Search** [Coming Soon]
+- 🔍 **Web Search** 
   - Real-time web information integration
   - Smart search results synthesis
   - Accurate information citation

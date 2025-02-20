@@ -53,7 +53,7 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 ### Initial Release
 - Local Ollama service integration
 - Multiple LLM model configuration support
-- Web search capability (Coming Soon!!!)
+- Web search capability
 - Intuitive chat interface
 - Model configuration and performance mode settings
 
