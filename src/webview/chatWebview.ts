@@ -879,12 +879,10 @@ export function getChatWebviewContent(config: any): string {
             function appendMessage(content, isUser) {
                 let currentGroup;
                 if (isUser) {
-                    // 创建新的对话组
                     currentGroup = document.createElement('div');
                     currentGroup.className = 'conversation-group';
                     chatContainer.appendChild(currentGroup);
                 } else {
-                    // 获取最后一个对话组
                     currentGroup = chatContainer.lastElementChild;
                     if (!currentGroup || !currentGroup.classList.contains('conversation-group')) {
                         currentGroup = document.createElement('div');
@@ -896,28 +894,25 @@ export function getChatWebviewContent(config: any): string {
                 const messageDiv = document.createElement('div');
                 messageDiv.className = \`message \${isUser ? 'user-message' : 'assistant-message'}\`;
                 
-                // 添加前缀
                 const prefixDiv = document.createElement('div');
                 prefixDiv.className = 'message-prefix';
                 prefixDiv.textContent = isUser ? '- 我' : \`- \${currentModelName}\`;
                 messageDiv.appendChild(prefixDiv);
                 
-                // 添加消息内容
                 const contentDiv = document.createElement('div');
                 contentDiv.className = 'message-content';
                 if (isUser) {
                     contentDiv.textContent = content;
                 } else {
-                    // 为AI消息添加markdown-content类
                     contentDiv.className += ' markdown-content';
-                    contentDiv.innerHTML = processMessage(content);
+                    const processedContent = content.replace(/\s+/g, ' ').trim();
+                    contentDiv.innerHTML = processMessage(processedContent);
                 }
                 messageDiv.appendChild(contentDiv);
                 
                 currentGroup.appendChild(messageDiv);
                 chatContainer.scrollTop = chatContainer.scrollHeight;
 
-                // 保存消息到状态
                 const state = vscode.getState() || { messages: [] };
                 state.messages.push({ content, isUser });
                 vscode.setState(state);
@@ -968,9 +963,10 @@ export function getChatWebviewContent(config: any): string {
                                 const contentDiv = streamingDiv.querySelector('.message-content');
                                 if (contentDiv) {
                                     contentDiv.className = 'message-content markdown-content';
-                                    contentDiv.innerHTML = processMessage(
-                                        (contentDiv.innerHTML || '') + message.content
-                                    );
+                                    const currentContent = contentDiv.innerHTML || '';
+                                    const newContent = message.content;
+                                    const processedContent = (currentContent + newContent).replace(/\s+/g, ' ').trim();
+                                    contentDiv.innerHTML = processMessage(processedContent);
                                     chatContainer.scrollTop = chatContainer.scrollHeight;
                                 }
                             }
