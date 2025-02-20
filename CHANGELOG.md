@@ -4,6 +4,16 @@ All notable changes to the "vscode-ollama" extension will be documented in this 
 
 Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
 
+## [1.0.2] - 2025-02-20
+
+### Added
+- Added "/reset" command to reset the conversation context
+- Added system prompt configuration support
+
+### Fixed
+- Fixed chat message context management based on maxTokens setting
+- Improved message history token limit handling
+
 ## [1.0.1] - 2025-02-18
 
 ### Added
