@@ -40,6 +40,42 @@ let lastMessageDiv: boolean = false;
 // 在文件开头添加默认搜索引擎配置
 const DEFAULT_SEARCH_PROVIDER = 'duckduckgo';
 
+// 在文件顶部添加消息历史存储
+let messageHistory: Array<{role: string, content: string}> = [];
+
+// 添加一个函数来管理消息历史大小
+function manageMessageHistory(messages: Array<{role: string, content: string}>, maxTokens: number): Array<{role: string, content: string}> {
+	// 保留系统提示词
+	const systemMessage = messages.find(msg => msg.role === 'system');
+	let history = messages.filter(msg => msg.role !== 'system');
+	
+	// 粗略估计token数（每个字符约1个token）
+	let totalLength = systemMessage ? systemMessage.content.length : 0;
+	
+	// 从最新的消息开始保留
+	const managedHistory = [];
+	if (systemMessage) {
+		managedHistory.push(systemMessage);
+	}
+	
+	// 从最新的消息往前遍历
+	for (let i = history.length - 1; i >= 0; i--) {
+		const message = history[i];
+		const messageLength = message.content.length;
+		
+		// 如果添加这条消息后仍在限制内，则添加
+		if (totalLength + messageLength <= maxTokens) {
+			managedHistory.push(message);
+			totalLength += messageLength;
+		} else {
+			break;
+		}
+	}
+	
+	// 反转数组以保持正确的顺序（系统消息在前，最新消息在后）
+	return managedHistory.reverse();
+}
+
 // 将 getOllamaConfig 移到 activate 函数外部
 export function getOllamaConfig(): OllamaConfig {
 	const config = vscode.workspace.getConfiguration('vscode-ollama');
@@ -236,9 +272,12 @@ export function activate(context: vscode.ExtensionContext) {
 								rawMessage: message
 							});
 
-							const messages = message.resetContext ? [] : [
-								{ role: 'system', content: currentConfig.systemPrompt }
-							];
+							const messages = message.resetContext ? [] : manageMessageHistory([...messageHistory], currentConfig.maxTokens);
+
+							// 如果是重置上下文或者消息历史为空，添加系统提示词
+							if (message.resetContext || messages.length === 0) {
+								messages.push({ role: 'system', content: currentConfig.systemPrompt });
+							}
 
 							if (message.webSearch) {
 								try {
@@ -275,6 +314,7 @@ export function activate(context: vscode.ExtensionContext) {
 								}
 							}
 
+							// 添加用户新消息
 							messages.push({ role: 'user', content: message.content });
 
 							const response = await fetch(`${currentConfig.baseUrl}/api/chat`, {
@@ -340,6 +380,11 @@ export function activate(context: vscode.ExtensionContext) {
 										}
 
 										if (data.done) {
+											// 更新消息历史，确保不超过token限制
+											messageHistory = manageMessageHistory([
+												...messages,
+												{ role: 'assistant', content: content }
+											], currentConfig.maxTokens);
 											panel.webview.postMessage({
 												command: 'streamMessage',
 												content: '',
@@ -428,6 +473,7 @@ export function activate(context: vscode.ExtensionContext) {
 
 			// 当面板关闭时清除引用
 			panel.onDidDispose(() => {
+				messageHistory = [];
 				panel = undefined;
 			}, null, context.subscriptions);
 		});
