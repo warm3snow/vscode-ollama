@@ -68,6 +68,10 @@ VSCode Ollama is a powerful Visual Studio Code extension that seamlessly integra
    - Type "Ollama: Settings"
    - Configure server address and default model
 
+ <p align="center">
+     <img src="resources/settings.png" alt="VSCode Ollama Settings Interface" width="800"/>
+  </p>
+
 4. **Start Using**
    - Use command "Ollama: Open Chat" to start conversation
    - Select model in chat interface

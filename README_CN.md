@@ -68,6 +68,10 @@ VSCode Ollama 是一个强大的 Visual Studio Code 扩展，它将 Ollama 的�
    - 输入 "Ollama: Settings"
    - 配置服务器地址和默认模型
 
+  <p align="center">
+     <img src="resources/settings.png" alt="VSCode Ollama Settings Interface" width="800"/>
+  </p>
+
 4. **开始使用**
    - 使用命令 "Ollama: Open Chat" 开始对话
    - 在聊天界面选择模型
