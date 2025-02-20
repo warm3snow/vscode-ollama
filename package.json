@@ -77,10 +77,10 @@
         },
         "vscode-ollama.searchProvider": {
           "type": "string",
-          "default": "baidu",
+          "default": "duckduckgo",
           "enum": [
-            "baidu",
             "duckduckgo",
+            "baidu",
             "brave",
             "searxng",
             "brave-api",

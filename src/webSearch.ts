@@ -1,5 +1,6 @@
 import fetch from 'node-fetch';
 import { SearchResult } from './types';
+import { getOllamaConfig } from './extension'; // 确保导入 getOllamaConfig
 
 const RETRY_ATTEMPTS = 3;
 const RETRY_DELAY = 1000;
@@ -10,10 +11,12 @@ export const searchWeb = async (provider: string, query: string): Promise<Search
     console.log(`Starting web search with provider: ${provider}, query: ${query}`);
     
     try {
+        const { baseUrl } = getOllamaConfig();
+        
         let results: SearchResult[];
         switch (provider.toLowerCase()) {
             case "duckduckgo":
-                results = await webDuckDuckGoSearch(query);
+                results = await webDuckDuckGoSearch(query, baseUrl);
                 break;
             case "baidu":
                 results = await webBaiduSearch(query);
@@ -31,8 +34,8 @@ export const searchWeb = async (provider: string, query: string): Promise<Search
                 results = await braveAPISearch(query);
                 break;
             default:
-                console.log('Using default search provider: baidu');
-                results = await webBaiduSearch(query);
+                console.log('Using default search provider: duckduckgo');
+                results = await webDuckDuckGoSearch(query, baseUrl);
         }
         
         console.log(`Search completed. Found ${results.length} results`);
@@ -43,63 +46,94 @@ export const searchWeb = async (provider: string, query: string): Promise<Search
     }
 };
 
-async function webDuckDuckGoSearch(query: string): Promise<SearchResult[]> {
+async function translateQuery(query: string, baseUrl: string): Promise<string> {
+    try {
+        const { model } = getOllamaConfig();
+        const response = await fetch(`${baseUrl}/api/generate`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                model: model,
+                prompt: `Translate to English: "${query}". Only return the translated text, no explanations.`,
+                stream: false,
+                raw: true,
+                max_tokens: 100,
+            }),
+        });
+
+        if (!response.ok) {
+            throw new Error(`Translation failed with status: ${response.status}`);
+        }
+
+        const data = await response.json();
+        console.log('Translation response:', data);
+        
+        // 从响应中提取生成的文本
+        const translatedText = data.response ? data.response.trim() : query;
+        console.log('Translated text:', translatedText);
+        
+        return translatedText;
+    } catch (error) {
+        console.error('Error translating query:', error);
+        return query; // 如果翻译失败，返回原始查询
+    }
+}
+
+async function webDuckDuckGoSearch(query: string, baseUrl: string): Promise<SearchResult[]> {
     let attempts = 0;
     while (attempts < RETRY_ATTEMPTS) {
         try {
-            // 使用 DuckDuckGo API 的替代方案
-            const response = await fetch(
-                'https://api.duckduckgo.com/?' + new URLSearchParams({
-                    q: query,
-                    format: 'json',
-                    no_redirect: '1',
-                    no_html: '1',
-                    skip_disambig: '1'
-                }),
+            const searchResponse = await fetch(
+                `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`,
                 {
                     headers: {
-                        'User-Agent': 'VSCode-Ollama/1.0'
+                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                        'Accept': 'text/html,application/xhtml+xml'
                     }
                 }
             );
 
-            if (!response.ok) {
-                throw new Error(`Search failed with status: ${response.status}`);
+            if (!searchResponse.ok) {
+                throw new Error(`Search failed with status: ${searchResponse.status}`);
             }
 
-            const data = await response.json();
-            console.log('DuckDuckGo raw response:', data); // 添加日志
-
+            const html = await searchResponse.text();
+            console.log('Got DuckDuckGo search results page');
+            
+            // 使用更可靠的选择器来提取搜索结果
             const results: SearchResult[] = [];
+            const resultRegex = /<div class="result[^>]*>[\s\S]*?<a[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>[\s\S]*?<a[^>]*class="result__snippet"[^>]*>([\s\S]*?)<\/a>/g;
+            let match;
+            let count = 0;
 
-            // 添加 Abstract 结果
-            if (data.Abstract) {
-                results.push({
-                    title: data.Heading || query,
-                    url: data.AbstractURL || '',
-                    snippet: data.Abstract
-                });
+            while ((match = resultRegex.exec(html)) !== null && count < 5) {
+                const url = match[1];
+                const title = match[2].replace(/<[^>]+>/g, '').trim();
+                const snippet = match[3].replace(/<[^>]+>/g, '').trim();
+
+                // 过滤掉广告和无效结果
+                if (title && url && !url.includes('duckduckgo.com') && 
+                    !results.some(r => r.url === url)) {
+                    results.push({ title, url, snippet });
+                    count++;
+                }
             }
 
-            // 添加 RelatedTopics
-            if (data.RelatedTopics && Array.isArray(data.RelatedTopics)) {
-                data.RelatedTopics
-                    .filter((topic: any) => topic.FirstURL && topic.Text)
-                    .slice(0, 4) // 只取前4个相关主题
-                    .forEach((topic: any) => {
-                        results.push({
-                            title: topic.Text.split(' - ')[0] || topic.Text,
-                            url: topic.FirstURL,
-                            snippet: topic.Text
-                        });
-                    });
+            // 如果没有找到任何结果，返回一个默认结果
+            if (results.length === 0) {
+                return [{
+                    title: `Search "${query}" on DuckDuckGo`,
+                    url: `https://duckduckgo.com/?q=${encodeURIComponent(query)}`,
+                    snippet: `Click to search "${query}" on DuckDuckGo`
+                }];
             }
 
-            console.log('Processed search results:', results); // 添加日志
             return results;
 
         } catch (error) {
-            console.error('DuckDuckGo search error:', error); // 添加错误日志
+            console.error(`DuckDuckGo search attempt ${attempts + 1} failed:`, error);
             attempts++;
             if (attempts === RETRY_ATTEMPTS) {
                 console.error('All attempts failed for DuckDuckGo search');
@@ -219,7 +253,7 @@ async function webBraveSearch(query: string): Promise<SearchResult[]> {
 // 其他搜索引擎的实现可以根据需要添加
 async function webGoogleSearch(query: string): Promise<SearchResult[]> {
     // 默认返回 DuckDuckGo 的结果，因为 Google 需要 API key
-    return webDuckDuckGoSearch(query);
+    return webDuckDuckGoSearch(query, 'http://127.0.0.1:11434');
 }
 
 async function webSogouSearch(query: string): Promise<SearchResult[]> {
@@ -235,4 +269,35 @@ async function searxngSearch(query: string): Promise<SearchResult[]> {
 async function braveAPISearch(query: string): Promise<SearchResult[]> {
     // 实现 Brave API 搜索
     return [];
+}
+
+async function fetchPageContent(url: string): Promise<string | null> {
+    try {
+        const response = await fetch(url, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8'
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error(`Failed to fetch page: ${response.status}`);
+        }
+
+        const html = await response.text();
+        
+        // 提取主要文本内容
+        const cleanText = html
+            .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '') // 移除脚本
+            .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')   // 移除样式
+            .replace(/<[^>]+>/g, ' ')  // 移除其他HTML标签
+            .replace(/\s+/g, ' ')      // 合并空白字符
+            .trim();                   // 移除首尾空白
+
+        return cleanText;
+    } catch (error) {
+        console.error('Error fetching page content:', error);
+        return null;
+    }
 } 

@@ -37,25 +37,25 @@ let currentReader: ReadableStreamDefaultReader<Uint8Array> | null = null;
 let lastMessageDiv: boolean = false;
 
 // 在文件开头添加默认搜索引擎配置
-const DEFAULT_SEARCH_PROVIDER = 'baidu';
+const DEFAULT_SEARCH_PROVIDER = 'duckduckgo';
+
+// 将 getOllamaConfig 移到 activate 函数外部
+export function getOllamaConfig(): OllamaConfig {
+	const config = vscode.workspace.getConfiguration('vscode-ollama');
+	return {
+		baseUrl: config.get<string>('baseUrl') || 'http://127.0.0.1:11434',
+		model: config.get<string>('model') || 'deepseek-r1:32b',
+		maxTokens: config.get<number>('maxTokens') || 4096,
+		keepAlive: config.get<string>('keepAlive') || '5 minutes',
+		performanceMode: config.get<string>('performanceMode') || 'Base (Default)'
+	};
+}
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
 export function activate(context: vscode.ExtensionContext) {
 	try {
 		let panel: vscode.WebviewPanel | undefined;  // 声明在更高的作用域
-
-		// Get configuration function
-		function getOllamaConfig(): OllamaConfig {
-			const config = vscode.workspace.getConfiguration('vscode-ollama');
-			return {
-				baseUrl: config.get<string>('baseUrl') || 'http://127.0.0.1:11434',
-				model: config.get<string>('model') || 'deepseek-r1:32b',
-				maxTokens: config.get<number>('maxTokens') || 4096,
-				keepAlive: config.get<string>('keepAlive') || '5 minutes',
-				performanceMode: config.get<string>('performanceMode') || 'Base (Default)'
-			};
-		}
 
 		async function getAvailableModels(baseUrl: string): Promise<string[]> {
 			try {
@@ -447,7 +447,7 @@ export function activate(context: vscode.ExtensionContext) {
 			})
 		);
 	} catch (error) {
-		vscode.window.showErrorMessage(`Failed to activate: ${error}`);
+		console.error('Activation failed:', error);
 	}
 }
 
