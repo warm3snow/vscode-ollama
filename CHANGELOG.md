@@ -4,6 +4,22 @@ All notable changes to the "vscode-ollama" extension will be documented in this 
 
 Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
 
+## [1.0.3] - 2025-02-20
+
+### Added
+- Support for web search
+- Support deepseek-r1 reasoning model
+
+### Changed
+- Optimized text display for better readability
+- Improved message rendering performance and stability
+
+### Fixed
+- Fixed incomplete display of English text
+- Fixed message formatting issues
+- Fixed newline character display issues
+- Fixed response styling issues
+
 ## [1.0.2] - 2025-02-20
 
 ### Added
