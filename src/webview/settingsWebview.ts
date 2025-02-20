@@ -98,6 +98,11 @@ export function getSettingsWebviewContent(config: any): string {
             </select>
         </div>
 
+        <div class="setting-item">
+            <label class="setting-label">System Prompt</label>
+            <textarea id="systemPrompt" rows="4" style="width: 100%; padding: 8px; border: 1px solid var(--vscode-input-border); background: var(--vscode-input-background); color: var(--vscode-input-foreground); border-radius: 4px; resize: vertical;">${config.systemPrompt.replace(/"/g, '&quot;').replace(/\n/g, '&#10;')}</textarea>
+        </div>
+
         <button onclick="saveSettings()">Save Settings</button>
 
         <script>
@@ -109,7 +114,8 @@ export function getSettingsWebviewContent(config: any): string {
                 model: "${config.model}",
                 maxTokens: ${config.maxTokens},
                 keepAlive: "${config.keepAlive}",
-                performanceMode: "${config.performanceMode}"
+                performanceMode: "${config.performanceMode}",
+                systemPrompt: "${config.systemPrompt.replace(/"/g, '&quot;').replace(/\n/g, '&#10;')}"
             };
             vscode.setState(currentState);
 
@@ -122,12 +128,14 @@ export function getSettingsWebviewContent(config: any): string {
                     document.getElementById('maxTokens').value = state.maxTokens;
                     document.getElementById('keepAlive').value = state.keepAlive;
                     document.getElementById('performanceMode').value = state.performanceMode;
+                    document.getElementById('systemPrompt').value = state.systemPrompt;
                 }
             });
 
             function saveSettings() {
                 const settings = {
                     baseUrl: document.getElementById('baseUrl').value,
+                    systemPrompt: document.getElementById('systemPrompt').value,
                     model: document.getElementById('model').value,
                     maxTokens: parseInt(document.getElementById('maxTokens').value),
                     keepAlive: document.getElementById('keepAlive').value,

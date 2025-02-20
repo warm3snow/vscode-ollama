@@ -12,6 +12,7 @@ interface OllamaConfig {
 	maxTokens: number;
 	keepAlive: string;
 	performanceMode: string;
+	systemPrompt: string;
 }
 
 // Add interface for chat response
@@ -42,12 +43,15 @@ const DEFAULT_SEARCH_PROVIDER = 'duckduckgo';
 // 将 getOllamaConfig 移到 activate 函数外部
 export function getOllamaConfig(): OllamaConfig {
 	const config = vscode.workspace.getConfiguration('vscode-ollama');
+	const defaultSystemPrompt = "Given the following conversation, relevant context, and a follow up question, reply with an answer to the current question the user is asking. Return only your response to the question given the above information following the users instructions as needed.";
+	
 	return {
 		baseUrl: config.get<string>('baseUrl') || 'http://127.0.0.1:11434',
 		model: config.get<string>('model') || 'deepseek-r1:32b',
 		maxTokens: config.get<number>('maxTokens') || 4096,
 		keepAlive: config.get<string>('keepAlive') || '5 minutes',
-		performanceMode: config.get<string>('performanceMode') || 'Base (Default)'
+		performanceMode: config.get<string>('performanceMode') || 'Base (Default)',
+		systemPrompt: config.get<string>('systemPrompt') || defaultSystemPrompt
 	};
 }
 
@@ -140,6 +144,7 @@ export function activate(context: vscode.ExtensionContext) {
 									await config.update('maxTokens', message.settings.maxTokens, true);
 									await config.update('keepAlive', message.settings.keepAlive, true);
 									await config.update('performanceMode', message.settings.performanceMode, true);
+									await config.update('systemPrompt', message.settings.systemPrompt, true);
 									vscode.window.showInformationMessage('Settings saved successfully');
 									settingsPanel?.webview.postMessage({ command: 'saveSuccess' });
 								} catch (error) {
@@ -232,7 +237,7 @@ export function activate(context: vscode.ExtensionContext) {
 							});
 
 							const messages = message.resetContext ? [] : [
-								{ role: 'system', content: 'You are a helpful assistant.' }
+								{ role: 'system', content: currentConfig.systemPrompt }
 							];
 
 							if (message.webSearch) {
@@ -256,7 +261,6 @@ export function activate(context: vscode.ExtensionContext) {
 										});
 									} else {
 										console.log('No search results found');
-										// 可以选择通知用户搜索未返回结果
 										panel.webview.postMessage({
 											command: 'searchStatus',
 											status: 'No results found'
@@ -264,7 +268,6 @@ export function activate(context: vscode.ExtensionContext) {
 									}
 								} catch (error) {
 									console.error('Web search failed:', error);
-									// 通知用户搜索失败
 									panel.webview.postMessage({
 										command: 'searchStatus',
 										status: 'Search failed'
