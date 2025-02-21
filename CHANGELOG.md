@@ -4,6 +4,13 @@ All notable changes to the "vscode-ollama" extension will be documented in this 
 
 Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
 
+## [1.0.4] - 2025-02-21
+
+### Fixed
+- Fixed an issue where new chat responses were displayed in the wrong position after stopping generation
+- Fixed incorrect message appending in multiple conversation threads
+- Optimized streaming response handling logic for chat messages
+
 ## [1.0.3] - 2025-02-20
 
 ### Added
