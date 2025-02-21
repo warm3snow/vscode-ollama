@@ -36,6 +36,7 @@ interface AbortError extends Error {
 let settingsPanel: vscode.WebviewPanel | undefined = undefined;
 let currentReader: ReadableStreamDefaultReader<Uint8Array> | null = null;
 let lastMessageDiv: boolean = false;
+let currentConversationId: string | null = null;
 
 // 在文件开头添加默认搜索引擎配置
 const DEFAULT_SEARCH_PROVIDER = 'duckduckgo';
@@ -317,6 +318,10 @@ export function activate(context: vscode.ExtensionContext) {
 							// 添加用户新消息
 							messages.push({ role: 'user', content: message.content });
 
+							// 生成新的会话ID
+							currentConversationId = Date.now().toString();
+							lastMessageDiv = false;  // 重置状态
+
 							const response = await fetch(`${currentConfig.baseUrl}/api/chat`, {
 								method: 'POST',
 								headers: {
@@ -342,6 +347,7 @@ export function activate(context: vscode.ExtensionContext) {
 							const decoder = new TextDecoder();
 							let content = '';
 
+							// 修改流式消息处理部分
 							try {
 								while (true) {
 									const { value, done } = await currentReader.read();
@@ -358,29 +364,16 @@ export function activate(context: vscode.ExtensionContext) {
 										const data = JSON.parse(line) as OllamaChatResponse;
 										content += data.message.content;
 										
-										if (!panel) {
-											return;
-										}
-
-										if (!lastMessageDiv) {
-											panel.webview.postMessage({
-												command: 'streamMessage',
-												content: data.message.content,
-												done: false,
-												newMessage: true
-											});
-											lastMessageDiv = true;
-										} else {
-											panel.webview.postMessage({
-												command: 'streamMessage',
-												content: data.message.content,
-												done: false,
-												newMessage: false
-											});
-										}
+										panel.webview.postMessage({
+											command: 'streamMessage',
+											content: data.message.content,
+											done: false,
+											newMessage: !lastMessageDiv,
+											conversationId: currentConversationId
+										});
+										lastMessageDiv = true;
 
 										if (data.done) {
-											// 更新消息历史，确保不超过token限制
 											messageHistory = manageMessageHistory([
 												...messages,
 												{ role: 'assistant', content: content }
@@ -389,9 +382,12 @@ export function activate(context: vscode.ExtensionContext) {
 												command: 'streamMessage',
 												content: '',
 												done: true,
-												newMessage: false
+												newMessage: false,
+												conversationId: currentConversationId
 											});
 											lastMessageDiv = false;
+											content = '';
+											currentConversationId = null;
 										}
 									}
 								}
@@ -401,14 +397,16 @@ export function activate(context: vscode.ExtensionContext) {
 										panel.webview.postMessage({
 											command: 'streamMessage',
 											content: '\n[已终止生成]',
-											done: true
+											done: true,
+											newMessage: false,
+											conversationId: currentConversationId
 										});
+										currentConversationId = null;
+										lastMessageDiv = false;
 									}
 								} else {
 									throw error;
 								}
-							} finally {
-								currentReader = null;
 							}
 
 							// 更新模型名称
@@ -433,6 +431,7 @@ export function activate(context: vscode.ExtensionContext) {
 						if (currentReader) {
 							currentReader.cancel();
 							currentReader = null;
+							lastMessageDiv = false;  // 重置 lastMessageDiv 状态
 						}
 					} else if (message.command === 'toggleTheme') {
 						try {

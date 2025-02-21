@@ -81,11 +81,15 @@ export function getChatWebviewContent(config: any): string {
         }
     `;
 
+    // 添加会话ID追踪
+    let currentConversationId: string | null = null;
+
     // 修改 appendMessage 函数
     const appendMessageFn = `
         function appendMessage(content, isUser) {
             let currentGroup = chatContainer.lastElementChild;
-            if (!currentGroup || !currentGroup.classList.contains('conversation-group')) {
+            
+            if (isUser || !currentGroup || !currentGroup.classList.contains('conversation-group')) {
                 currentGroup = document.createElement('div');
                 currentGroup.className = 'conversation-group';
                 chatContainer.appendChild(currentGroup);
@@ -93,6 +97,10 @@ export function getChatWebviewContent(config: any): string {
 
             const messageDiv = document.createElement('div');
             messageDiv.className = 'message ' + (isUser ? 'user-message' : 'assistant-message');
+            
+            if (!isUser) {
+                messageDiv.setAttribute('data-conversation-id', currentConversationId || '');
+            }
             
             const prefixDiv = document.createElement('div');
             prefixDiv.className = 'message-prefix';
@@ -208,7 +216,7 @@ export function getChatWebviewContent(config: any): string {
                 color: var(--vscode-input-foreground);
                 border-radius: 6px;
                 font-size: 14px;
-                transition: all 0.3s ease;
+                transition: opacity 0.3s ease, cursor 0.3s ease;
                 resize: none;
                 min-height: 24px;
                 max-height: 200px;
@@ -221,6 +229,16 @@ export function getChatWebviewContent(config: any): string {
             #message-input:hover:not(:focus) {
                 outline: none;
                 background: var(--vscode-input-background);
+            }
+            #message-input:disabled {
+                opacity: 0.7;
+                cursor: not-allowed;
+                background: var(--vscode-input-background) !important;
+                color: var(--vscode-input-foreground) !important;
+            }
+            #message-input:disabled::placeholder {
+                color: var(--vscode-input-placeholderForeground);
+                opacity: 0.7;
             }
             button {
                 padding: 8px 16px;
@@ -689,7 +707,7 @@ export function getChatWebviewContent(config: any): string {
             // Send message function
             function sendMessage() {
                 const content = messageInput.value.trim();
-                if (!content) return;
+                if (!content || isGenerating) return;
 
                 console.log('Preparing to send message:', {
                     content,
@@ -950,6 +968,11 @@ export function getChatWebviewContent(config: any): string {
                 isGenerating = generating;
                 sendButton.textContent = generating ? 'Stop' : 'Send';
                 sendButton.classList.toggle('sending', generating);
+                
+                // 更新输入框状态和光标样式
+                messageInput.disabled = generating;
+                messageInput.style.opacity = generating ? '0.7' : '1';
+                messageInput.style.cursor = generating ? 'not-allowed' : 'text';
             }
 
             // Message event listener
@@ -968,56 +991,18 @@ export function getChatWebviewContent(config: any): string {
                         done: message.done
                     });
                     
-                    if (!message.done) {
-                        if (message.newMessage) {
-                            let currentGroup = chatContainer.lastElementChild;
-                            if (!currentGroup || !currentGroup.classList.contains('conversation-group')) {
-                                currentGroup = document.createElement('div');
-                                currentGroup.className = 'conversation-group';
-                                chatContainer.appendChild(currentGroup);
-                            }
-
-                            const messageDiv = document.createElement('div');
-                            messageDiv.className = 'message assistant-message streaming';
-                            
-                            const prefixDiv = document.createElement('div');
-                            prefixDiv.className = 'message-prefix';
-                            prefixDiv.textContent = \`- \${currentModelName}\`;
-                            messageDiv.appendChild(prefixDiv);
-
-                            const contentDiv = document.createElement('div');
-                            contentDiv.className = 'message-content';
-                            contentDiv.textContent = message.content;
-                            messageDiv.appendChild(contentDiv);
-                            
-                            currentGroup.appendChild(messageDiv);
-                        } else {
-                            const streamingDiv = document.querySelector('.message.assistant-message.streaming');
-                            if (streamingDiv) {
-                                const contentDiv = streamingDiv.querySelector('.message-content');
-                                if (contentDiv) {
-                                    const currentContent = contentDiv.textContent || '';
-                                    contentDiv.textContent = currentContent + message.content;
-                                }
-                            }
-                        }
+                    if (message.newMessage) {
+                        currentConversationId = message.conversationId;
+                        appendMessage(message.content, false);
                     } else {
-                        const streamingDiv = document.querySelector('.message.assistant-message.streaming');
-                        if (streamingDiv) {
-                            streamingDiv.classList.remove('streaming');
-                            // 保存完成的消息到状态
-                            const state = vscode.getState() || { messages: [] };
-                            const contentDiv = streamingDiv.querySelector('.message-content');
-                            if (contentDiv) {
-                                state.messages.push({ 
-                                    content: contentDiv.textContent, 
-                                    isUser: false 
-                                });
-                                vscode.setState(state);
-                            }
+                        const messageDiv = document.querySelector(\`.assistant-message[data-conversation-id="\${message.conversationId}"] .message-content\`);
+                        if (messageDiv) {
+                            messageDiv.innerHTML = processMessage(messageDiv.textContent + message.content);
                         }
-                        chatContainer.scrollTop = chatContainer.scrollHeight;
-                        updateSendButton(false);
+                    }
+
+                    if (message.done) {
+                        currentConversationId = null;
                     }
                 } else if (message.command === 'receiveMessage') {
                     appendMessage(message.content, false);
@@ -1061,6 +1046,16 @@ export function getChatWebviewContent(config: any): string {
                     setTimeout(() => {
                         notification.remove();
                     }, 2000);
+                } else if (message.command === 'forceEndChat') {
+                    // 强制结束当前对话，确保下一次对话会创建新的对话组
+                    const streamingDiv = document.querySelector('.message.assistant-message.streaming');
+                    if (streamingDiv) {
+                        streamingDiv.classList.remove('streaming');
+                    }
+                    // 创建新的空对话组，为下一次对话做准备
+                    const newGroup = document.createElement('div');
+                    newGroup.className = 'conversation-group';
+                    chatContainer.appendChild(newGroup);
                 }
             });
 
