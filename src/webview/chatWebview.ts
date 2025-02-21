@@ -1001,8 +1001,11 @@ export function getChatWebviewContent(config: any): string {
                         }
                     }
 
+                    // 当消息完成时重置状态
                     if (message.done) {
                         currentConversationId = null;
+                        updateSendButton(false); // 重置按钮状态
+                        messageInput.focus(); // 将焦点放回输入框
                     }
                 } else if (message.command === 'receiveMessage') {
                     appendMessage(message.content, false);
