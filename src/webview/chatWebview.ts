@@ -18,12 +18,14 @@ export function getChatWebviewContent(config: any): string {
     // Define the processMessage function as a string
     const processMessageFn = `
         function processMessage(content) {
-            // 1. 处理转义字符和换行
+            // 1. 处理转义字符
             content = content.replace(/\\\\u003c/g, '<')
-                           .replace(/\\\\u003e/g, '>')
-                           .replace(/\\n/g, '<br>');
+                           .replace(/\\\\u003e/g, '>');
             
-            // 2. 处理思考标签
+            // 2. 将 <br> 转换为实际的换行符，这样 marked 可以正确处理
+            content = content.replace(/<br>/g, '\\n');
+            
+            // 3. 处理思考标签
             content = content.replace(/<think>([\\\\s\\\\S]*?)<\\/think>/g, (match, p1) => {
                 // 生成唯一ID
                 const thinkId = 'think-' + Math.random().toString(36).substr(2, 9);
@@ -108,14 +110,30 @@ export function getChatWebviewContent(config: any): string {
             messageDiv.appendChild(prefixDiv);
             
             const contentDiv = document.createElement('div');
-            contentDiv.className = 'message-content';
-            contentDiv.innerHTML = processMessage(content);
+            contentDiv.className = 'message-content markdown-content';
+            
+            if (isUser) {
+                // 对用户消息，直接将 <br> 转换为换行符
+                contentDiv.innerHTML = content.replace(/<br>/g, '\\n');
+            } else {
+                // 保存原始 markdown 内容
+                contentDiv.setAttribute('data-markdown-content', content);
+                
+                // 使用 marked 的配置来允许 HTML 标签
+                const markedOptions = {
+                    breaks: true,        // 将换行符转换为 <br>
+                    gfm: true,          // 启用 GitHub 风格的 markdown
+                    xhtml: true,        // 使用 xhtml 格式的标签
+                };
+                
+                contentDiv.innerHTML = marked.parse(processMessage(content), markedOptions);
+            }
             
             messageDiv.appendChild(contentDiv);
             currentGroup.appendChild(messageDiv);
             chatContainer.scrollTop = chatContainer.scrollHeight;
 
-            // 初始化新添加消息中的思考部分
+            // Initialize new think sections in the message
             initAllThinkSections();
         }
     `;
@@ -995,17 +1013,35 @@ export function getChatWebviewContent(config: any): string {
                         currentConversationId = message.conversationId;
                         appendMessage(message.content, false);
                     } else {
-                        const messageDiv = document.querySelector(\`.assistant-message[data-conversation-id="\${message.conversationId}"] .message-content\`);
+                        // 使用字符串连接而不是嵌套的模板字符串
+                        const selector = '.assistant-message[data-conversation-id="' + message.conversationId + '"] .message-content';
+                        const messageDiv = document.querySelector(selector);
                         if (messageDiv) {
-                            messageDiv.innerHTML = processMessage(messageDiv.textContent + message.content);
+                            const currentText = messageDiv.getAttribute('data-markdown-content') || '';
+                            const newText = currentText + message.content;
+                            messageDiv.setAttribute('data-markdown-content', newText);
+                            
+                            // 使用相同的 marked 配置
+                            const markedOptions = {
+                                breaks: true,
+                                gfm: true,
+                                xhtml: true,
+                            };
+                            
+                            messageDiv.innerHTML = marked.parse(processMessage(newText), markedOptions);
+                            
+                            // 如果存在代码块，确保滚动到底部
+                            if (messageDiv.querySelector('pre')) {
+                                chatContainer.scrollTop = chatContainer.scrollHeight;
+                            }
                         }
                     }
 
                     // 当消息完成时重置状态
                     if (message.done) {
                         currentConversationId = null;
-                        updateSendButton(false); // 重置按钮状态
-                        messageInput.focus(); // 将焦点放回输入框
+                        updateSendButton(false);
+                        messageInput.focus();
                     }
                 } else if (message.command === 'receiveMessage') {
                     appendMessage(message.content, false);
