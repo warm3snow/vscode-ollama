@@ -165,3 +165,7 @@ See [CHANGELOG.md](CHANGELOG.md) for release notes.
 ## 📝 License
 
 This extension is licensed under the [MIT License](LICENSE).
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=warm3snow/vscode-ollama&type=Date)](https://star-history.com/#warm3snow/vscode-ollama&Date)

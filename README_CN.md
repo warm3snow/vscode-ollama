@@ -172,3 +172,7 @@ VSCode Ollama 是一个强大的 Visual Studio Code 扩展，它将 Ollama 的�
 ## 📝 许可证
 
 本扩展基于 [MIT 许可证](LICENSE) 授权。
+
+## Star 趋势
+
+[![Star History Chart](https://api.star-history.com/svg?repos=warm3snow/vscode-ollama&type=Date)](https://star-history.com/#warm3snow/vscode-ollama&Date)
