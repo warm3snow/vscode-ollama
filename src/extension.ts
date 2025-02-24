@@ -182,6 +182,7 @@ export function activate(context: vscode.ExtensionContext) {
 									await config.update('keepAlive', message.settings.keepAlive, true);
 									await config.update('performanceMode', message.settings.performanceMode, true);
 									await config.update('systemPrompt', message.settings.systemPrompt, true);
+									
 									vscode.window.showInformationMessage('Settings saved successfully');
 									settingsPanel?.webview.postMessage({ command: 'saveSuccess' });
 								} catch (error) {
@@ -192,20 +193,17 @@ export function activate(context: vscode.ExtensionContext) {
 								try {
 									const response = await fetch(`${message.baseUrl}/api/version`);
 									if (response.ok) {
-										vscode.window.showInformationMessage('Test Connection is Success');
 										settingsPanel?.webview.postMessage({
 											command: 'testConnectionResult',
 											success: true
 										});
 									} else {
-										vscode.window.showErrorMessage('Test Connection is Failed, Please check specified url');
 										settingsPanel?.webview.postMessage({
 											command: 'testConnectionResult',
 											success: false
 										});
 									}
 								} catch (error) {
-									vscode.window.showErrorMessage('Test Connection is Failed, Please check specified url');
 									settingsPanel?.webview.postMessage({
 										command: 'testConnectionResult',
 										success: false

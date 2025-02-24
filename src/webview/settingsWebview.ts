@@ -72,6 +72,22 @@ export function getSettingsWebviewContent(config: any): string {
                 opacity: 0.6;
                 cursor: not-allowed;
             }
+            .connection-status {
+                margin-top: 8px;
+                padding: 8px;
+                border-radius: 4px;
+                display: none;
+            }
+            .connection-status.success {
+                display: block;
+                background-color: var(--vscode-inputValidation-infoBackground);
+                border: 1px solid var(--vscode-inputValidation-infoBorder);
+            }
+            .connection-status.error {
+                display: block;
+                background-color: var(--vscode-inputValidation-errorBackground);
+                border: 1px solid var(--vscode-inputValidation-errorBorder);
+            }
         </style>
     </head>
     <body>
@@ -81,6 +97,7 @@ export function getSettingsWebviewContent(config: any): string {
             <label class="setting-label">Base URL</label>
             <input type="text" id="baseUrlInput" value="${config.baseUrl}" placeholder="Enter Ollama server base URL">
             <button id="testConnectionBtn" class="test-connection-button">Test Connection</button>
+            <div id="connectionStatus" class="connection-status"></div>
         </div>
         
         <div class="setting-item">
@@ -202,6 +219,7 @@ export function getSettingsWebviewContent(config: any): string {
             document.getElementById('testConnectionBtn').addEventListener('click', async () => {
                 const baseUrl = document.getElementById('baseUrlInput').value.trim();
                 const testButton = document.getElementById('testConnectionBtn');
+                const statusDiv = document.getElementById('connectionStatus');
                 
                 if (!baseUrl) {
                     vscode.postMessage({
@@ -213,6 +231,8 @@ export function getSettingsWebviewContent(config: any): string {
 
                 testButton.disabled = true;
                 testButton.textContent = 'Testing...';
+                statusDiv.className = 'connection-status';
+                statusDiv.textContent = '';
 
                 vscode.postMessage({
                     command: 'testConnection',
@@ -225,8 +245,18 @@ export function getSettingsWebviewContent(config: any): string {
                 const message = event.data;
                 if (message.command === 'testConnectionResult') {
                     const testButton = document.getElementById('testConnectionBtn');
+                    const statusDiv = document.getElementById('connectionStatus');
+                    
                     testButton.disabled = false;
                     testButton.textContent = 'Test Connection';
+                    
+                    if (message.success) {
+                        statusDiv.className = 'connection-status success';
+                        statusDiv.textContent = 'Test Connection is Success';
+                    } else {
+                        statusDiv.className = 'connection-status error';
+                        statusDiv.textContent = 'Test Connection is Failed, Please check specified url';
+                    }
                 }
             });
         </script>
