@@ -56,6 +56,22 @@ export function getSettingsWebviewContent(config: any): string {
                 90% { opacity: 1; transform: translateY(0); }
                 100% { opacity: 0; transform: translateY(-20px); }
             }
+            .test-connection-button {
+                margin-top: 8px;
+                padding: 6px 12px;
+                background: var(--vscode-button-background);
+                color: var(--vscode-button-foreground);
+                border: none;
+                border-radius: 4px;
+                cursor: pointer;
+            }
+            .test-connection-button:hover {
+                background: var(--vscode-button-hoverBackground);
+            }
+            .test-connection-button:disabled {
+                opacity: 0.6;
+                cursor: not-allowed;
+            }
         </style>
     </head>
     <body>
@@ -63,7 +79,8 @@ export function getSettingsWebviewContent(config: any): string {
         
         <div class="setting-item">
             <label class="setting-label">Base URL</label>
-            <input type="text" id="baseUrl" value="${config.baseUrl}" />
+            <input type="text" id="baseUrlInput" value="${config.baseUrl}" placeholder="Enter Ollama server base URL">
+            <button id="testConnectionBtn" class="test-connection-button">Test Connection</button>
         </div>
         
         <div class="setting-item">
@@ -123,7 +140,7 @@ export function getSettingsWebviewContent(config: any): string {
             window.addEventListener('load', () => {
                 const state = vscode.getState();
                 if (state) {
-                    document.getElementById('baseUrl').value = state.baseUrl;
+                    document.getElementById('baseUrlInput').value = state.baseUrl;
                     document.getElementById('model').value = state.model;
                     document.getElementById('maxTokens').value = state.maxTokens;
                     document.getElementById('keepAlive').value = state.keepAlive;
@@ -134,7 +151,7 @@ export function getSettingsWebviewContent(config: any): string {
 
             function saveSettings() {
                 const settings = {
-                    baseUrl: document.getElementById('baseUrl').value,
+                    baseUrl: document.getElementById('baseUrlInput').value,
                     systemPrompt: document.getElementById('systemPrompt').value,
                     model: document.getElementById('model').value,
                     maxTokens: parseInt(document.getElementById('maxTokens').value),
@@ -165,7 +182,7 @@ export function getSettingsWebviewContent(config: any): string {
             async function refreshModels() {
                 vscode.postMessage({
                     command: 'refreshModels',
-                    baseUrl: document.getElementById('baseUrl').value
+                    baseUrl: document.getElementById('baseUrlInput').value
                 });
             }
 
@@ -178,6 +195,38 @@ export function getSettingsWebviewContent(config: any): string {
                         .map(model => 
                             \`<option value="\${model}" \${model === currentModel ? 'selected' : ''}>\${model}</option>\`
                         ).join('');
+                }
+            });
+
+            // Add test connection functionality
+            document.getElementById('testConnectionBtn').addEventListener('click', async () => {
+                const baseUrl = document.getElementById('baseUrlInput').value.trim();
+                const testButton = document.getElementById('testConnectionBtn');
+                
+                if (!baseUrl) {
+                    vscode.postMessage({
+                        command: 'showError',
+                        message: 'Please enter the base URL'
+                    });
+                    return;
+                }
+
+                testButton.disabled = true;
+                testButton.textContent = 'Testing...';
+
+                vscode.postMessage({
+                    command: 'testConnection',
+                    baseUrl: baseUrl
+                });
+            });
+
+            // Handle test connection result
+            window.addEventListener('message', event => {
+                const message = event.data;
+                if (message.command === 'testConnectionResult') {
+                    const testButton = document.getElementById('testConnectionBtn');
+                    testButton.disabled = false;
+                    testButton.textContent = 'Test Connection';
                 }
             });
         </script>

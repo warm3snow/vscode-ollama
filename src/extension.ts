@@ -188,27 +188,35 @@ export function activate(context: vscode.ExtensionContext) {
 									vscode.window.showErrorMessage(`Failed to save settings: ${error}`);
 								}
 								return;
+							case 'testConnection':
+								try {
+									const response = await fetch(`${message.baseUrl}/api/version`);
+									if (response.ok) {
+										vscode.window.showInformationMessage('Test Connection is Success');
+										settingsPanel?.webview.postMessage({
+											command: 'testConnectionResult',
+											success: true
+										});
+									} else {
+										vscode.window.showErrorMessage('Test Connection is Failed, Please check specified url');
+										settingsPanel?.webview.postMessage({
+											command: 'testConnectionResult',
+											success: false
+										});
+									}
+								} catch (error) {
+									vscode.window.showErrorMessage('Test Connection is Failed, Please check specified url');
+									settingsPanel?.webview.postMessage({
+										command: 'testConnectionResult',
+										success: false
+									});
+								}
+								return;
 						}
 					},
 					undefined,
 					context.subscriptions
 				);
-			}
-		});
-
-		// Register test connection command
-		let testConnectionCommand = vscode.commands.registerCommand('vscode-ollama.testConnection', async () => {
-			const config = getOllamaConfig();
-			try {
-				const response = await fetch(`${config.baseUrl}/api/version`);
-				if (response.ok) {
-					vscode.window.showInformationMessage('Successfully connected to Ollama server');
-				} else {
-					vscode.window.showErrorMessage('Failed to connect to Ollama server');
-				}
-			} catch (error) {
-				const errorMessage = error instanceof Error ? error.message : String(error);
-				vscode.window.showErrorMessage(`Error connecting to Ollama: ${errorMessage}`);
 			}
 		});
 
@@ -479,7 +487,6 @@ export function activate(context: vscode.ExtensionContext) {
 
 		// Add all commands to the context subscriptions
 		context.subscriptions.push(settingsCommand);
-		context.subscriptions.push(testConnectionCommand);
 		context.subscriptions.push(refreshModelsCommand);
 		context.subscriptions.push(chatCommand);
 

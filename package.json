@@ -36,10 +36,6 @@
       {
         "command": "vscode-ollama.settings",
         "title": "Ollama: Settings"
-      },
-      {
-        "command": "vscode-ollama.testConnection",
-        "title": "Ollama: Test Connection"
       }
     ],
     "configuration": {
