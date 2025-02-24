@@ -2,7 +2,7 @@
   "name": "vscode-ollama",
   "displayName": "VSCode Ollama",
   "description": "VSCode Ollama is a powerful Visual Studio Code extension that seamlessly integrates Ollama's local LLM capabilities into your development environment.",
-  "version": "1.0.4",
+  "version": "1.1.0",
   "publisher": "warm3snow",
   "author": {
     "name": "warm3snow"

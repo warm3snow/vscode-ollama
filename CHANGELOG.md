@@ -4,6 +4,13 @@ All notable changes to the "vscode-ollama" extension will be documented in this 
 
 Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
 
+## [1.1.0] - 2025-02-24
+
+### Changed
+- Moved connection test functionality to settings page
+- Improved output message formatting
+- Enhanced overall user interface organization
+
 ## [1.0.4] - 2025-02-21
 
 ### Fixed
