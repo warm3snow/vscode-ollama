@@ -4,6 +4,27 @@ All notable changes to the "vscode-ollama" extension will be documented in this 
 
 Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
 
+## [1.2.0] - 2025-02-26
+
+### Added
+- Enhanced web search functionality
+  - Use Bing as default search engine
+  - Added DuckDuckGo as fallback search engine
+  - Improved search reliability and stability
+
+### Changed
+- Refined chat view interface
+  - UI/UX improvements
+  - Enhanced visual presentation
+  - Optimized response handling
+
+### Fixed
+- Fixed web search functionality issues
+  - Improved error handling for search engines
+  - Enhanced page content fetching mechanism
+- Fixed think time settings for DeepSeek model
+- Fixed various stability issues
+
 ## [1.1.0] - 2025-02-24
 
 ### Changed

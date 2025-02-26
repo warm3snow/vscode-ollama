@@ -91,7 +91,6 @@ export function getChatWebviewContent(config: any): string {
 
         // 初始化单个think section
         function initThinkSection(thinkId) {
-            console.log('Initializing think section:', thinkId);
             const header = document.querySelector('[data-think-id="' + thinkId + '"]');
             const content = document.getElementById(thinkId);
             
@@ -125,7 +124,6 @@ export function getChatWebviewContent(config: any): string {
                     }
                 });
                 
-                console.log('Think section initialized:', thinkId);
             }
         }
 
@@ -185,7 +183,6 @@ export function getChatWebviewContent(config: any): string {
                 
                 // 检查是否包含think标签
                 if (processedContent.includes('<think>')) {
-                    console.log('Message contains think tags, handling specially');
                     
                     // 分离思考内容和实际回复
                     const thinkMatch = processedContent.match(/<think>([\\s\\S]*?)<\\/think>/);
@@ -1185,13 +1182,27 @@ export function getChatWebviewContent(config: any): string {
                     execute: () => {
                         // 清空消息历史
                         vscode.postMessage({
-                            command: 'sendMessage',
-                            content: '重置对话上下文',
-                            webSearch: webSearchEnabled,
-                            modelName: currentModelName,
-                            resetContext: true
+                            command: 'resetContext'
                         });
-                        updateSendButton(true); // 更新按钮状态
+                        
+                        // 创建新的对话组
+                        const newGroup = document.createElement('div');
+                        newGroup.className = 'conversation-group';
+                        
+                        // 显示重置提示
+                        const resetNotification = document.createElement('div');
+                        resetNotification.className = 'message assistant-message';
+                        const modelName = currentModelName || 'Assistant'; // 使用当前模型名称，如果未定义则使用默认值
+                        resetNotification.innerHTML = \`
+                            <div class="message-prefix">\${modelName || 'Assistant'}</div>
+                            <div class="message-content markdown-content">
+                                <p>对话上下文已重置。</p>
+                            </div>
+                        \`;
+                        
+                        newGroup.appendChild(resetNotification);
+                        chatContainer.appendChild(newGroup);
+                        chatContainer.scrollTop = chatContainer.scrollHeight;
                     }
                 }
                 // 可以在这里添加更多命令
@@ -1365,8 +1376,6 @@ export function getChatWebviewContent(config: any): string {
                         msg.classList.remove('streaming');
                     });
                 } else if (message.command === 'streamMessage') {
-                    console.log('Stream message chunk:', message.content);
-                    console.log('Contains think tag:', message.content.includes('<think>') || message.content.includes('</think>'));
                     
                     if (message.newMessage) {
                         currentConversationId = message.conversationId;
@@ -1380,16 +1389,12 @@ export function getChatWebviewContent(config: any): string {
                             const newText = currentText + message.content;
                             messageDiv.setAttribute('data-markdown-content', newText);
                             
-                            console.log('Stream update - newText:', newText);
-                            console.log('Contains think tags:', newText.includes('<think>'));
-                            
                             // 处理转义字符
                             let processedContent = newText.replace(/\\\\u003c/g, '<')
                                                        .replace(/\\\\u003e/g, '>');
                             
                             // 检查是否包含think标签
                             if (processedContent.includes('<think>') && processedContent.includes('</think>')) {
-                                console.log('Stream message contains complete think tags');
                                 
                                 // 分离思考内容和实际回复
                                 const thinkMatch = processedContent.match(/<think>([\\s\\S]*?)<\\/think>/);

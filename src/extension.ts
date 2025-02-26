@@ -309,6 +309,15 @@ export function activate(context: vscode.ExtensionContext) {
 							command: 'updateModelName',
 							modelName: config.model
 						});
+					} else if (message.command === 'resetContext') {
+						// 获取当前配置以获取系统提示词
+						const currentConfig = getOllamaConfig();
+						// 重新初始化消息历史，只包含系统提示词
+						messageHistory = [{ 
+							role: 'system', 
+							content: currentConfig.systemPrompt 
+						}];
+						return;
 					} else if (message.command === 'sendMessage') {
 						try {
 							const currentConfig = getOllamaConfig();
@@ -357,7 +366,6 @@ export function activate(context: vscode.ExtensionContext) {
 											content: systemMessage
 										});
 										
-										console.log('Search context with webpage contents added to messages: ', messages);
 									} else {
 										console.log('No search results found');
 										panel.webview.postMessage({
@@ -376,6 +384,8 @@ export function activate(context: vscode.ExtensionContext) {
 
 							// 添加用户新消息
 							messages.push({ role: 'user', content: message.content });
+
+							console.log('Messages to send to ollama: ', messages);
 
 							// 生成新的会话ID
 							currentConversationId = Date.now().toString();
