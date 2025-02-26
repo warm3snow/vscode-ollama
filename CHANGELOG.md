@@ -11,6 +11,7 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
   - Use Bing as default search engine
   - Added DuckDuckGo as fallback search engine
   - Improved search reliability and stability
+- Added 'Thinking' time for DeepSeek model
 
 ### Changed
 - Refined chat view interface
@@ -22,7 +23,6 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 - Fixed web search functionality issues
   - Improved error handling for search engines
   - Enhanced page content fetching mechanism
-- Fixed think time settings for DeepSeek model
 - Fixed various stability issues
 - Fixed /reset not working properly
 

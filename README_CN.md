@@ -87,7 +87,6 @@ VSCode Ollama 是一个强大的 Visual Studio Code 扩展，它将 Ollama 的�
 ### 命令列表
 - `Ollama: Open Chat` - 打开聊天界面
 - `Ollama: Settings` - 打开设置页面
-- `Ollama: Test Connection` - 测试服务器连接
 
 ### 快捷键
 - `Shift + Enter` - 在聊天输入框中换行

@@ -87,7 +87,6 @@ VSCode Ollama is a powerful Visual Studio Code extension that seamlessly integra
 ### Commands
 - `Ollama: Open Chat` - Open chat interface
 - `Ollama: Settings` - Open settings page
-- `Ollama: Test Connection` - Test server connection
 
 ### Shortcuts
 - `Shift + Enter` - New line in chat input
