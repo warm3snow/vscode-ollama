@@ -271,64 +271,97 @@ export function getChatWebviewContent(config: any): string {
                 overflow-y: auto;
                 margin-bottom: 20px;
                 padding: 15px;
-                border: 1px solid #e0e0e0;
-                border-radius: 8px;
+                border: 1px solid var(--vscode-input-border);
+                border-radius: 12px;
                 background: var(--vscode-editor-background);
                 box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
                 display: flex;
                 flex-direction: column;
+                scroll-behavior: smooth; /* 平滑滚动 */
             }
             .message {
                 margin: 10px 0;
-                padding: 12px;
-                border-radius: 8px;
-                max-width: 85%;
+                padding: 16px 18px; /* 增加所有消息的内边距 */
+                border-radius: 16px;
+                max-width: 80%;
                 background: transparent;
                 display: flex;
                 flex-direction: column;
                 position: relative;
+                box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15); /* 加深阴影 */
+                transition: all 0.2s ease;
             }
             .message-prefix {
-                color: var(--vscode-textLink-foreground);
                 font-size: 0.9em;
-                margin-bottom: 4px;
-                opacity: 0.8;
-                align-self: flex-start;
+                margin-bottom: 8px;
+                opacity: 0.9;
+                font-weight: 500;
+                display: flex;
+                align-items: center;
+                gap: 5px;
+                color: var(--vscode-foreground);
             }
             .user-message .message-prefix {
-                align-self: flex-end;
-                color: var(--vscode-button-foreground);
-                opacity: 0.9;
+                align-self: flex-end; /* 用户消息前缀靠右 */
+                color: white;
+            }
+            /* 添加用户和助手头像样式 */
+            .message-prefix::before {
+                content: '';
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                width: 24px;
+                height: 24px;
+                border-radius: 50%;
+                margin-right: 6px;
+                background-position: center;
+                background-size: cover;
+                font-size: 14px;
+                line-height: 1;
+                box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+            }
+            .user-message .message-prefix::before {
+                order: 2; /* 将用户头像放在文字右边 */
+                margin-right: 0;
+                margin-left: 6px;
+                background-color: rgba(255, 255, 255, 0.2);
+                border: 1px solid rgba(255, 255, 255, 0.3);
+                content: '👤';
+            }
+            .assistant-message .message-prefix::before {
+                background-color: var(--vscode-textLink-foreground);
+                color: white;
+                content: '🤖';
             }
             .message-content {
                 margin-left: 0;
                 white-space: pre-wrap;
                 word-wrap: break-word;
+                line-height: 1.5;
             }
-            .user-message {
-                color: var(--vscode-foreground);
-                margin-left: auto;
-                margin-right: 0;
-                background-color: var(--vscode-button-background);
+            .user-message .message-content {
                 color: var(--vscode-button-foreground);
-                border-radius: 12px 12px 2px 12px;
             }
-            .assistant-message {
-                color: var(--vscode-foreground);
-                margin-right: auto;
-                margin-left: 0;
-                background-color: var(--vscode-editor-background);
-                border: 1px solid var(--vscode-input-border);
-                border-radius: 12px 12px 12px 2px;
-                box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            .conversation-group {
+                padding: 6px 12px;
+                margin: 12px 0;
+                border-radius: 8px;
+                transition: background-color 0.2s ease;
+                display: flex;
+                flex-direction: column;
+            }
+            .message:hover {
+                box-shadow: 0 3px 8px rgba(0, 0, 0, 0.15);
             }
             .input-wrapper {
                 position: relative;
                 margin-bottom: 32px;
-                padding: 15px;
+                padding: 18px;
                 background: var(--vscode-editor-background);
-                border-radius: 8px;
+                border-radius: 12px;
                 box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+                border: 1px solid var(--vscode-input-border);
             }
             #web-search {
                 position: absolute;
@@ -361,24 +394,27 @@ export function getChatWebviewContent(config: any): string {
             }
             #message-input {
                 flex: 1;
-                padding: 12px;
-                border: none;
+                padding: 14px;
+                border: 1px solid var(--vscode-input-border);
                 background: var(--vscode-input-background);
                 color: var(--vscode-input-foreground);
-                border-radius: 6px;
-                font-size: 14px;
-                transition: opacity 0.3s ease, cursor 0.3s ease;
+                border-radius: 8px;
+                font-size: 15px;
+                transition: opacity 0.3s ease, cursor 0.3s ease, border-color 0.3s ease;
                 resize: none;
                 min-height: 24px;
                 max-height: 200px;
                 outline: none;
+                font-family: var(--vscode-font-family);
+                line-height: 1.5;
             }
             #message-input:focus {
                 outline: none;
-                background: var(--vscode-input-background);
+                border-color: var(--vscode-focusBorder);
+                box-shadow: 0 0 0 1px var(--vscode-focusBorder);
             }
             #message-input:hover:not(:focus) {
-                outline: none;
+                border-color: var(--vscode-input-border);
                 background: var(--vscode-input-background);
             }
             #message-input:disabled {
@@ -391,12 +427,12 @@ export function getChatWebviewContent(config: any): string {
                 color: var(--vscode-input-placeholderForeground);
                 opacity: 0.7;
             }
-            button {
-                padding: 8px 16px;
+            #send-button {
+                padding: 12px 20px;
                 background: var(--vscode-button-background);
                 color: var(--vscode-button-foreground);
                 border: none;
-                border-radius: 6px;
+                border-radius: 8px;
                 cursor: pointer;
                 font-weight: 500;
                 transition: all 0.2s ease;
@@ -404,8 +440,9 @@ export function getChatWebviewContent(config: any): string {
                 display: flex;
                 align-items: center;
                 justify-content: center;
+                font-size: 14px;
             }
-            button:hover {
+            #send-button:hover {
                 background: var(--vscode-button-hoverBackground);
                 transform: translateY(-1px);
             }
@@ -552,63 +589,76 @@ export function getChatWebviewContent(config: any): string {
                 margin: 4px 0;
             }
 
-            /* 美化聊天容器边框 */
-            .conversation-group {
-                padding: 12px;
-                margin: 8px 0;
-                border-radius: 8px;
-                transition: background-color 0.2s ease;
-                display: flex;
-                flex-direction: column;
-            }
-
-            .conversation-group:nth-child(odd) {
-                background-color: var(--vscode-editor-background);
-            }
-
-            .conversation-group:nth-child(even) {
-                background-color: var(--vscode-editor-inactiveSelectionBackground);
-            }
-
             /* 添加Markdown样式 */
             .markdown-content {
-                line-height: 1.5;
+                line-height: 1.6;
             }
+            
             .markdown-content p {
-                margin-top: 0.5em;
+                margin-top: 0.4em;
+                margin-bottom: 0.4em;
+            }
+            
+            .markdown-content h1, 
+            .markdown-content h2, 
+            .markdown-content h3, 
+            .markdown-content h4 {
+                margin-top: 1em;
                 margin-bottom: 0.5em;
+                font-weight: 600;
             }
-            .markdown-content code {
-                background: var(--vscode-textCodeBlock-background);
-                padding: 2px 6px;
-                border-radius: 4px;
-                font-family: var(--vscode-editor-font-family);
-                font-size: 0.9em;
+            
+            .markdown-content ul, 
+            .markdown-content ol {
+                padding-left: 1.5em;
+                margin: 0.5em 0;
             }
-            .markdown-content pre {
-                background: var(--vscode-textCodeBlock-background);
-                padding: 16px;
-                border-radius: 6px;
-                overflow-x: auto;
+            
+            .markdown-content li {
+                margin-bottom: 0.25em;
             }
-            .markdown-content pre code {
-                background: none;
-                padding: 0;
-            }
+            
             .markdown-content blockquote {
                 border-left: 4px solid var(--vscode-textBlockQuote-border);
-                margin: 0;
-                padding-left: 16px;
+                margin: 0.5em 0;
+                padding: 0.5em 1em;
+                background: var(--vscode-textBlockQuote-background);
                 color: var(--vscode-textBlockQuote-foreground);
+                border-radius: 0 4px 4px 0;
             }
+            
+            .markdown-content a {
+                color: var(--vscode-textLink-foreground);
+                text-decoration: none;
+            }
+            
+            .markdown-content a:hover {
+                text-decoration: underline;
+                color: var(--vscode-textLink-activeForeground);
+            }
+            
             .markdown-content table {
                 border-collapse: collapse;
                 width: 100%;
-                margin: 16px 0;
+                margin: 1em 0;
             }
-            .markdown-content th, .markdown-content td {
+            
+            .markdown-content th, 
+            .markdown-content td {
                 border: 1px solid var(--vscode-input-border);
-                padding: 8px;
+                padding: 8px 12px;
+            }
+            
+            .markdown-content th {
+                background: var(--vscode-editor-inactiveSelectionBackground);
+                font-weight: 600;
+            }
+            
+            /* 改进图片样式 */
+            .markdown-content img {
+                max-width: 100%;
+                border-radius: 8px;
+                margin: 0.5em 0;
             }
 
             /* 命令提示样式 */
@@ -723,21 +773,18 @@ export function getChatWebviewContent(config: any): string {
             }
 
             .think-section {
-                margin: 10px 0;
+                margin: 12px 0 15px 0;
                 background: var(--vscode-editor-background);
-                border-radius: 6px;
+                border-radius: 10px;
                 overflow: hidden;
                 border: 1px solid var(--vscode-input-border);
-                box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+                box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
                 width: 100%; /* 确保思考部分宽度一致 */
-            }
-
-            .assistant-message .think-section {
-                background: var(--vscode-editor-background);
+                transition: all 0.3s ease;
             }
 
             .think-header {
-                padding: 8px 12px;
+                padding: 10px 14px;
                 cursor: pointer;
                 user-select: none;
                 display: flex !important;
@@ -747,33 +794,49 @@ export function getChatWebviewContent(config: any): string {
                 font-size: 0.9em;
                 background: var(--vscode-editor-background);
                 border-bottom: 1px solid var(--vscode-input-border);
+                transition: background-color 0.2s ease;
             }
 
             .think-header:hover {
                 background: var(--vscode-list-hoverBackground);
             }
-
+            
+            /* 改进思考切换按钮样式 */
             .think-toggle {
-                display: inline-block;
-                transition: transform 0.2s;
-                font-family: monospace;
-                width: 12px;
-                text-align: center;
+                display: inline-flex;
+                justify-content: center;
+                align-items: center;
+                width: 16px;
+                height: 16px;
+                border-radius: 50%;
+                background-color: var(--vscode-textLink-foreground);
+                color: var(--vscode-button-foreground);
+                font-size: 10px;
+                transition: transform 0.3s ease, background-color 0.2s ease;
+            }
+            
+            .think-header:hover .think-toggle {
+                background-color: var(--vscode-textLink-activeForeground);
             }
 
             .think-content {
-                padding: 12px;
+                padding: 14px 16px;
                 white-space: pre-wrap;
                 word-wrap: break-word;
                 transition: all 0.3s ease;
-                max-height: 1000px;
+                max-height: 800px;
                 overflow: hidden;
                 opacity: 1;
                 font-size: 0.95em;
-                line-height: 1.4;
-                background: var(--vscode-editor-background);
+                line-height: 1.5;
+                background: var(--vscode-editor-inactiveSelectionBackground);
                 color: var(--vscode-foreground);
                 border-top: 1px solid var(--vscode-input-border);
+            }
+            
+            /* 思考过程内容里的段落间距 */
+            .think-content p {
+                margin: 0.4em 0;
             }
             
             .think-content.collapsed {
@@ -815,6 +878,120 @@ export function getChatWebviewContent(config: any): string {
             /* Add some space between conversation groups for better readability */
             .conversation-group + .conversation-group {
                 margin-top: 16px;
+            }
+
+            /* 添加消息出现动画 */
+            @keyframes messageAppear {
+                from {
+                    opacity: 0;
+                    transform: translateY(10px);
+                }
+                to {
+                    opacity: 1;
+                    transform: translateY(0);
+                }
+            }
+            
+            .message {
+                animation: messageAppear 0.3s ease forwards;
+            }
+
+            .user-message {
+                color: var(--vscode-foreground);
+                margin-left: auto; /* 用户消息靠右 */
+                margin-right: 0;
+                background-color: var(--vscode-button-background);
+                border-radius: 18px 18px 4px 18px;
+                box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+                padding: 14px 18px; /* 增加内边距 */
+            }
+            
+            .user-message .message-content {
+                color: white; /* 强制使用白色文本，确保可见性 */
+                font-size: 1.05em; /* 稍微增大字体 */
+                font-weight: 500; /* 稍微加粗 */
+                text-shadow: 0 1px 1px rgba(0, 0, 0, 0.1); /* 添加文字阴影增强可读性 */
+                letter-spacing: 0.01em; /* 增加字间距 */
+            }
+            
+            .user-message .message-prefix {
+                align-self: flex-end; /* 用户消息前缀靠右 */
+                color: rgba(255, 255, 255, 0.95); /* 更明确的白色，但略微透明 */
+                font-weight: 500;
+                margin-bottom: 8px; /* 增加与内容的间距 */
+            }
+
+            /* 欢迎消息样式优化 */
+            .welcome-message {
+                max-width: 100% !important;
+                width: 100%;
+                margin: 12px 0 24px 0 !important;
+                padding: 0 !important;
+                background: transparent !important;
+                box-shadow: none !important;
+                border: none !important;
+            }
+
+            .welcome-content {
+                background: linear-gradient(to right, 
+                                           rgba(var(--vscode-textLink-foreground-rgb), 0.1), 
+                                           rgba(var(--vscode-textLink-foreground-rgb), 0.05));
+                border-radius: 12px;
+                padding: 20px 24px;
+                border: 1px solid rgba(var(--vscode-textLink-foreground-rgb), 0.2);
+                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+                transition: all 0.3s ease;
+                animation: fadeIn 0.5s ease-in;
+            }
+            
+            .welcome-title {
+                margin: 0 0 16px 0;
+                color: var(--vscode-foreground);
+                font-size: 1.4em;
+                font-weight: 600;
+                letter-spacing: 0.01em;
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            }
+            
+            .welcome-text {
+                margin: 0;
+                color: var(--vscode-foreground);
+                font-size: 1em;
+                line-height: 1.6;
+                opacity: 0.9;
+            }
+            
+            .welcome-link {
+                color: var(--vscode-textLink-foreground);
+                text-decoration: none;
+                font-weight: 500;
+            }
+            
+            .welcome-link:hover {
+                text-decoration: underline;
+                color: var(--vscode-textLink-activeForeground);
+            }
+            
+            /* 添加CSS变量提取函数 */
+            :root {
+                --vscode-textLink-foreground-rgb: 0, 120, 212;
+            }
+            
+            .vscode-dark:root {
+                --vscode-textLink-foreground-rgb: 43, 136, 216;
+            }
+            
+            @keyframes fadeIn {
+                from {
+                    opacity: 0;
+                    transform: translateY(-10px);
+                }
+                to {
+                    opacity: 1;
+                    transform: translateY(0);
+                }
             }
         </style>
         <script>
@@ -960,34 +1137,28 @@ export function getChatWebviewContent(config: any): string {
             // 修改清除对话的处理逻辑
             clearChatButton.onclick = () => {
                 // 保存欢迎消息
-                const welcomeMessage = chatContainer.querySelector('.message:first-child');
+                const welcomeMessage = chatContainer.querySelector('.welcome-message');
                 
                 // 清除所有消息
                 chatContainer.innerHTML = '';
                 
                 // 如果存在欢迎消息，重新添加
-                if (welcomeMessage && welcomeMessage.innerHTML.includes('Welcome to VSCode Ollama')) {
+                if (welcomeMessage) {
                     chatContainer.appendChild(welcomeMessage.cloneNode(true));
                 } else {
                     // 如果没有欢迎消息，创建新的
                     const welcomeDiv = document.createElement('div');
-                    welcomeDiv.className = 'message assistant-message';
+                    welcomeDiv.className = 'message assistant-message welcome-message';
                     welcomeDiv.innerHTML = \`
-                        <div style="
-                            background: var(--vscode-textLink-activeForeground);
-                            padding: 15px;
-                            border-radius: 8px;
-                            margin-bottom: 20px;
-                            animation: fadeIn 0.5s ease-in;
-                        ">
-                            <h2 style="margin: 0 0 10px 0; color: var(--vscode-button-foreground);">
+                        <div class="welcome-content">
+                            <h2 class="welcome-title">
                                 👋 Welcome to VSCode Ollama!
                             </h2>
-                            <p style="margin: 0; color: var(--vscode-button-foreground);">
-                                <a href="https://github.com/warm3snow/vscode-ollama" style="color: var(--vscode-button-foreground);">
+                            <p class="welcome-text">
+                                <a href="https://github.com/warm3snow/vscode-ollama" class="welcome-link">
                                 [vscode-ollama] </a>是一款基于本地 Ollama 服务的 VS Code 扩展，支持模型配置、联网查询等多种特性。欢迎关注GitHub仓库并Star以支持开发者持续优化！
                                 <br><br>
-                                GitHub 仓库：<a href="https://github.com/warm3snow/vscode-ollama" style="color: var(--vscode-button-foreground);">
+                                GitHub 仓库：<a href="https://github.com/warm3snow/vscode-ollama" class="welcome-link">
                                     https://github.com/warm3snow/vscode-ollama
                                 </a>
                             </p>
@@ -1287,23 +1458,17 @@ export function getChatWebviewContent(config: any): string {
                 } else if (message.command === 'welcomeMessage') {
                     // 创建并添加欢迎消息
                     const welcomeDiv = document.createElement('div');
-                    welcomeDiv.className = 'message assistant-message';
+                    welcomeDiv.className = 'message assistant-message welcome-message';
                     welcomeDiv.innerHTML = \`
-                        <div style="
-                            background: var(--vscode-textLink-activeForeground);
-                            padding: 15px;
-                            border-radius: 8px;
-                            margin-bottom: 20px;
-                            animation: fadeIn 0.5s ease-in;
-                        ">
-                            <h2 style="margin: 0 0 10px 0; color: var(--vscode-button-foreground);">
+                        <div class="welcome-content">
+                            <h2 class="welcome-title">
                                 👋 Welcome to VSCode Ollama!
                             </h2>
-                            <p style="margin: 0; color: var(--vscode-button-foreground);">
-                                <a href="https://github.com/warm3snow/vscode-ollama" style="color: var(--vscode-button-foreground);">
+                            <p class="welcome-text">
+                                <a href="https://github.com/warm3snow/vscode-ollama" class="welcome-link">
                                 [vscode-ollama] </a>是一款基于本地 Ollama 服务的 VS Code 扩展，支持模型配置、联网查询等多种特性。欢迎关注GitHub仓库并Star以支持开发者持续优化！
                                 <br><br>
-                                GitHub 仓库：<a href="https://github.com/warm3snow/vscode-ollama" style="color: var(--vscode-button-foreground);">
+                                GitHub 仓库：<a href="https://github.com/warm3snow/vscode-ollama" class="welcome-link">
                                     https://github.com/warm3snow/vscode-ollama
                                 </a>
                             </p>
