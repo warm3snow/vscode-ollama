@@ -275,6 +275,8 @@ export function getChatWebviewContent(config: any): string {
                 border-radius: 8px;
                 background: var(--vscode-editor-background);
                 box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+                display: flex;
+                flex-direction: column;
             }
             .message {
                 margin: 10px 0;
@@ -282,27 +284,43 @@ export function getChatWebviewContent(config: any): string {
                 border-radius: 8px;
                 max-width: 85%;
                 background: transparent;
+                display: flex;
+                flex-direction: column;
+                position: relative;
             }
             .message-prefix {
                 color: var(--vscode-textLink-foreground);
                 font-size: 0.9em;
                 margin-bottom: 4px;
                 opacity: 0.8;
+                align-self: flex-start;
+            }
+            .user-message .message-prefix {
+                align-self: flex-end;
+                color: var(--vscode-button-foreground);
+                opacity: 0.9;
             }
             .message-content {
-                margin-left: 8px;
+                margin-left: 0;
                 white-space: pre-wrap;
                 word-wrap: break-word;
             }
             .user-message {
                 color: var(--vscode-foreground);
-                margin-left: 0;
-                opacity: 0.9;
+                margin-left: auto;
+                margin-right: 0;
+                background-color: var(--vscode-button-background);
+                color: var(--vscode-button-foreground);
+                border-radius: 12px 12px 2px 12px;
             }
             .assistant-message {
                 color: var(--vscode-foreground);
-                margin-right: 0;
-                opacity: 1;
+                margin-right: auto;
+                margin-left: 0;
+                background-color: var(--vscode-editor-background);
+                border: 1px solid var(--vscode-input-border);
+                border-radius: 12px 12px 12px 2px;
+                box-shadow: 0 1px 3px rgba(0,0,0,0.1);
             }
             .input-wrapper {
                 position: relative;
@@ -540,6 +558,8 @@ export function getChatWebviewContent(config: any): string {
                 margin: 8px 0;
                 border-radius: 8px;
                 transition: background-color 0.2s ease;
+                display: flex;
+                flex-direction: column;
             }
 
             .conversation-group:nth-child(odd) {
@@ -709,6 +729,11 @@ export function getChatWebviewContent(config: any): string {
                 overflow: hidden;
                 border: 1px solid var(--vscode-input-border);
                 box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+                width: 100%; /* 确保思考部分宽度一致 */
+            }
+
+            .assistant-message .think-section {
+                background: var(--vscode-editor-background);
             }
 
             .think-header {
@@ -767,16 +792,29 @@ export function getChatWebviewContent(config: any): string {
             /* Style for the actual response content after think section */
             .response-content {
                 margin-top: 15px;
+                width: 100%;
+            }
+            
+            /* Make sure code blocks and other content fit well */
+            .markdown-content {
+                width: 100%;
+            }
+            
+            .markdown-content pre {
+                width: 100%;
+                max-width: 100%;
+                overflow-x: auto;
+            }
+            
+            /* Adjust spacing for better readability */
+            .message-content.markdown-content p {
+                margin-top: 0.3em;
+                margin-bottom: 0.3em;
             }
 
-            /* Special style for text that looks like internal thinking but isn't wrapped in think tags */
-            .message-content:not(.user-message) p:first-child:contains("Okay, so the user") {
-                background-color: var(--vscode-textBlockQuote-background);
-                border-left: 3px solid var(--vscode-textBlockQuote-border);
-                padding: 8px 12px;
-                margin: 8px 0;
-                font-style: italic;
-                opacity: 0.8;
+            /* Add some space between conversation groups for better readability */
+            .conversation-group + .conversation-group {
+                margin-top: 16px;
             }
         </style>
         <script>
