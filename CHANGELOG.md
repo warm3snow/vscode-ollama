@@ -24,6 +24,7 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
   - Enhanced page content fetching mechanism
 - Fixed think time settings for DeepSeek model
 - Fixed various stability issues
+- Fixed /reset not working properly
 
 ## [1.1.0] - 2025-02-24
 
