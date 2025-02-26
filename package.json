@@ -71,25 +71,6 @@
           ],
           "description": "Performance mode setting"
         },
-        "vscode-ollama.searchProvider": {
-          "type": "string",
-          "default": "duckduckgo",
-          "enum": [
-            "duckduckgo",
-            "baidu",
-            "brave",
-            "searxng",
-            "brave-api",
-            "sogou",
-            "google"
-          ],
-          "description": "Select the search engine provider for web search"
-        },
-        "vscode-ollama.enableDevTools": {
-          "type": "boolean",
-          "default": true,
-          "description": "Enable developer tools for debugging"
-        },
         "vscode-ollama.systemPrompt": {
           "type": "string",
           "default": "Given the following conversation, relevant context, and a follow up question, reply with an answer to the current question the user is asking. Return only your response to the question given the above information following the users instructions as needed.",

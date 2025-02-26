@@ -39,7 +39,7 @@ let lastMessageDiv: boolean = false;
 let currentConversationId: string | null = null;
 
 // 在文件开头添加默认搜索引擎配置
-const DEFAULT_SEARCH_PROVIDER = 'duckduckgo';
+const DEFAULT_SEARCH_PROVIDER = 'bing';
 
 // 在文件顶部添加消息历史存储
 let messageHistory: Array<{role: string, content: string}> = [];
@@ -288,20 +288,67 @@ export function activate(context: vscode.ExtensionContext) {
 
 							if (message.webSearch) {
 								try {
-									console.log('Starting web search...');
-									const searchResults = await searchWeb(searchProvider, message.content);
+									console.log('Starting web search with Bing...');
+									// 强制使用 bing 作为搜索引擎
+									const searchResults = await searchWeb('bing', message.content);
 									console.log('Search results received:', searchResults);
 
 									if (searchResults.length > 0) {
-										const searchContext = `Based on the web search results for "${message.content}", here is the relevant information:\n\n` + 
-											searchResults.map((result, index) => 
-												`[Source ${index + 1}] ${result.title}\n${result.snippet}\nURL: ${result.url}\n`
-											).join('\n') + 
-											`\nAnalyze the above information and provide a comprehensive answer to the user's question: "${message.content}". ` +
-											`Focus on accuracy and relevance. If the search results don't contain enough information to fully answer the question, ` +
-											`acknowledge this limitation in your response.`;
+										// 获取前三个搜索结果的页面内容
+										const contentPromises = searchResults.slice(0, 3).map(async (result) => {
+											try {
+												const response = await fetch(result.url, { 
+													headers: {
+														'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/91.0.4472.124 Safari/537.36'
+													}
+												});
+												
+												if (!response.ok) {
+													return {
+														title: result.title,
+														snippet: result.snippet,
+														url: result.url,
+														content: ''
+													};
+												}
 
-										console.log('Search context created:', searchContext);
+												const html = await response.text();
+												// 简单提取文本内容
+												const content = html
+													.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+													.replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
+													.replace(/<[^>]+>/g, ' ')
+													.replace(/\s+/g, ' ')
+													.trim()
+													.slice(0, 2000); // 限制内容长度
+
+												return {
+													title: result.title,
+													snippet: result.snippet,
+													url: result.url,
+													content
+												};
+											} catch (error) {
+												console.error(`Failed to fetch content from ${result.url}:`, error);
+												return {
+													title: result.title,
+													snippet: result.snippet,
+													url: result.url,
+													content: ''
+												};
+											}
+										});
+
+										const contents = await Promise.all(contentPromises);
+
+										const searchContext = `Based on the Bing search results for "${message.content}", here is the information from top 3 results:\n\n` + 
+											contents.map((result, index) => 
+												`[Source ${index + 1}]\nTitle: ${result.title}\nURL: ${result.url}\n\nSnippet: ${result.snippet}\n\nContent: ${result.content}\n`
+											).join('\n---\n') + 
+											`\n\nBased on these search results, please provide a comprehensive answer to the user's question: "${message.content}". ` +
+											`If the search results don't contain enough information, please acknowledge this limitation.`;
+
+										console.log('Search context prepared for LLM analysis');
 
 										messages.push({ 
 											role: 'system', 
