@@ -25,6 +25,46 @@ export function getChatWebviewContent(config: any): string {
             // 2. 将 <br> 转换为实际的换行符，这样 marked 可以正确处理
             content = content.replace(/<br>/g, '\\n');
             
+            // 新增: 检测看起来像是思考文本的内容并包装为think标签
+            // 思考文本的特征：包含特定的引导词、提到用户输入、分析过程等
+            const thinkingPatterns = [
+                /(?:Alright|Okay|First|I should|I need|Let's|Let me|Looking at|Based on),?\\s+so\\s+(?:I|we)\\s+(?:need|should|have to|want to|could|might|can|will)\\s+(?:to\\s+)?(?:figure|respond|check|understand|think|analyze|consider|reply|handle)/i,
+                /The user (?:is asking|asked|mentioned|said|wants|said|provided)/i,
+                /(?:Putting|Breaking|Let's start|Let me analyze|I'll analyze|To summarize|In summary)/i
+            ];
+            
+            // 检查内容是否已经包含think标签，如果不包含则检查是否符合思考模式
+            if (!content.includes('<think>') && !content.includes('</think>')) {
+                // 检查是否有任何思考模式匹配
+                const hasThinkingPattern = thinkingPatterns.some(pattern => {
+                    return pattern.test(content);
+                });
+                
+                // 如果匹配思考模式，且不是单句回复，则包装为think标签
+                if (hasThinkingPattern && content.split('\\n').length > 2) {
+                    // 查找可能的最后一段思考后的实际回复（通常是简短的响应）
+                    const contentParts = content.split('\\n\\n');
+                    
+                    // 如果最后一段是简短的回复（少于100个字符），保留为实际回复
+                    if (contentParts.length > 1 && contentParts[contentParts.length - 1].length < 100) {
+                        const actualResponse = contentParts.pop();
+                        const thinkingContent = contentParts.join('\\n\\n');
+                        content = '<think>' + thinkingContent + '</think>\\n\\n' + actualResponse;
+                    } else {
+                        // 整个内容都是思考，最后一行可能是总结
+                        const lines = content.split('\\n');
+                        if (lines.length > 1 && lines[lines.length - 1].length < 100) {
+                            const actualResponse = lines.pop();
+                            const thinkingContent = lines.join('\\n');
+                            content = '<think>' + thinkingContent + '</think>\\n' + actualResponse;
+                        } else {
+                            // 整个内容都是思考
+                            content = '<think>' + content + '</think>';
+                        }
+                    }
+                }
+            }
+            
             // 3. 处理思考标签
             content = content.replace(/<think>([\\\\s\\\\S]*?)<\\/think>/g, (match, p1) => {
                 // 生成唯一ID
@@ -51,15 +91,31 @@ export function getChatWebviewContent(config: any): string {
 
         // 初始化单个think section
         function initThinkSection(thinkId) {
+            console.log('Initializing think section:', thinkId);
             const header = document.querySelector('[data-think-id="' + thinkId + '"]');
             const content = document.getElementById(thinkId);
             
-            if (!header || !content) return;
+            if (!header || !content) {
+                console.log('Could not find header or content for think section:', thinkId);
+                return;
+            }
             
             if (!header.hasAttribute('data-initialized')) {
                 header.setAttribute('data-initialized', 'true');
                 
+                // 默认展开 - 移除 collapsed 类
+                content.classList.remove('collapsed');
+                header.classList.remove('collapsed');
+                
+                // 确保toggle按钮显示为展开状态
+                const toggle = header.querySelector('.think-toggle');
+                if (toggle) {
+                    toggle.textContent = '▼';
+                }
+                
+                // 添加点击事件
                 header.addEventListener('click', function() {
+                    console.log('Think header clicked for:', thinkId);
                     content.classList.toggle('collapsed');
                     header.classList.toggle('collapsed');
                     
@@ -68,6 +124,8 @@ export function getChatWebviewContent(config: any): string {
                         toggle.textContent = content.classList.contains('collapsed') ? '▶' : '▼';
                     }
                 });
+                
+                console.log('Think section initialized:', thinkId);
             }
         }
 
@@ -116,17 +174,74 @@ export function getChatWebviewContent(config: any): string {
                 // 对用户消息，直接将 <br> 转换为换行符
                 contentDiv.innerHTML = content.replace(/<br>/g, '\\n');
             } else {
-                // 保存原始 markdown 内容
+                console.log('Raw assistant message:', content);
+                
+                // 保存原始内容
                 contentDiv.setAttribute('data-markdown-content', content);
                 
-                // 使用 marked 的配置来允许 HTML 标签
-                const markedOptions = {
-                    breaks: true,        // 将换行符转换为 <br>
-                    gfm: true,          // 启用 GitHub 风格的 markdown
-                    xhtml: true,        // 使用 xhtml 格式的标签
-                };
+                // 处理转义字符
+                let processedContent = content.replace(/\\\\u003c/g, '<')
+                                           .replace(/\\\\u003e/g, '>');
                 
-                contentDiv.innerHTML = marked.parse(processMessage(content), markedOptions);
+                // 检查是否包含think标签
+                if (processedContent.includes('<think>')) {
+                    console.log('Message contains think tags, handling specially');
+                    
+                    // 分离思考内容和实际回复
+                    const thinkMatch = processedContent.match(/<think>([\\s\\S]*?)<\\/think>/);
+                    
+                    if (thinkMatch) {
+                        const thinkContent = thinkMatch[1];
+                        const remainingContent = processedContent.replace(/<think>[\\s\\S]*?<\\/think>/, '').trim();
+                        
+                        // 生成唯一ID
+                        const thinkId = 'think-' + Math.random().toString(36).substr(2, 9);
+                        
+                        // 先添加思考部分
+                        const thinkHtml = [
+                            '<div class="think-section">',
+                            '    <div class="think-header" data-think-id="' + thinkId + '">',
+                            '        <span class="think-toggle">▼</span>',
+                            '        <span>思考过程</span>',
+                            '    </div>',
+                            '    <div class="think-content" id="' + thinkId + '">' + thinkContent.replace(/\\n/g, '<br>') + '</div>',
+                            '</div>'
+                        ].join('');
+                        
+                        // 然后添加实际回复部分
+                        const markedOptions = {
+                            breaks: true,
+                            gfm: true,
+                            xhtml: true
+                        };
+                        
+                        contentDiv.innerHTML = thinkHtml;
+                        
+                        if (remainingContent) {
+                            const responseDiv = document.createElement('div');
+                            responseDiv.className = 'response-content';
+                            responseDiv.innerHTML = marked.parse(remainingContent, markedOptions);
+                            contentDiv.appendChild(responseDiv);
+                        }
+                        
+                        // 在下一个事件循环中初始化思考部分
+                        setTimeout(() => initThinkSection(thinkId), 0);
+                    } else {
+                        // 如果没有正确匹配think标签，则按常规处理
+                        contentDiv.innerHTML = marked.parse(processedContent, {
+                            breaks: true,
+                            gfm: true,
+                            xhtml: true
+                        });
+                    }
+                } else {
+                    // 没有think标签的常规处理
+                    contentDiv.innerHTML = marked.parse(processedContent, {
+                        breaks: true,
+                        gfm: true,
+                        xhtml: true
+                    });
+                }
             }
             
             messageDiv.appendChild(contentDiv);
@@ -437,7 +552,11 @@ export function getChatWebviewContent(config: any): string {
 
             /* 添加Markdown样式 */
             .markdown-content {
-                line-height: 1.6;
+                line-height: 1.5;
+            }
+            .markdown-content p {
+                margin-top: 0.5em;
+                margin-bottom: 0.5em;
             }
             .markdown-content code {
                 background: var(--vscode-textCodeBlock-background);
@@ -470,13 +589,6 @@ export function getChatWebviewContent(config: any): string {
             .markdown-content th, .markdown-content td {
                 border: 1px solid var(--vscode-input-border);
                 padding: 8px;
-            }
-
-            .think-section,
-            .think-header,
-            .think-toggle,
-            .think-content {
-                display: none;
             }
 
             /* 命令提示样式 */
@@ -592,21 +704,24 @@ export function getChatWebviewContent(config: any): string {
 
             .think-section {
                 margin: 10px 0;
-                background: var(--vscode-editor-inactiveSelectionBackground);
+                background: var(--vscode-editor-background);
                 border-radius: 6px;
                 overflow: hidden;
+                border: 1px solid var(--vscode-input-border);
+                box-shadow: 0 1px 3px rgba(0,0,0,0.1);
             }
 
             .think-header {
                 padding: 8px 12px;
                 cursor: pointer;
                 user-select: none;
-                display: flex;
+                display: flex !important;
                 align-items: center;
                 gap: 8px;
                 color: var(--vscode-textLink-foreground);
                 font-size: 0.9em;
                 background: var(--vscode-editor-background);
+                border-bottom: 1px solid var(--vscode-input-border);
             }
 
             .think-header:hover {
@@ -623,25 +738,45 @@ export function getChatWebviewContent(config: any): string {
 
             .think-content {
                 padding: 12px;
-                border-top: 1px solid var(--vscode-input-border);
                 white-space: pre-wrap;
                 word-wrap: break-word;
                 transition: all 0.3s ease;
                 max-height: 1000px;
                 overflow: hidden;
                 opacity: 1;
+                font-size: 0.95em;
+                line-height: 1.4;
+                background: var(--vscode-editor-background);
+                color: var(--vscode-foreground);
+                border-top: 1px solid var(--vscode-input-border);
             }
-
+            
             .think-content.collapsed {
-                max-height: 0;
-                padding-top: 0;
-                padding-bottom: 0;
-                opacity: 0;
-                border-top: none;
+                max-height: 0 !important;
+                padding-top: 0 !important;
+                padding-bottom: 0 !important;
+                opacity: 0 !important;
+                border-top: none !important;
+                display: none !important;
             }
 
             .think-header.collapsed .think-toggle {
                 transform: rotate(-90deg);
+            }
+            
+            /* Style for the actual response content after think section */
+            .response-content {
+                margin-top: 15px;
+            }
+
+            /* Special style for text that looks like internal thinking but isn't wrapped in think tags */
+            .message-content:not(.user-message) p:first-child:contains("Okay, so the user") {
+                background-color: var(--vscode-textBlockQuote-background);
+                border-left: 3px solid var(--vscode-textBlockQuote-border);
+                padding: 8px 12px;
+                margin: 8px 0;
+                font-style: italic;
+                opacity: 0.8;
             }
         </style>
         <script>
@@ -649,6 +784,19 @@ export function getChatWebviewContent(config: any): string {
             const markedScript = document.createElement('script');
             markedScript.src = 'https://cdn.jsdelivr.net/npm/marked@9.0.0/marked.min.js';
             document.head.appendChild(markedScript);
+            
+            markedScript.onload = function() {
+                // Configure marked to allow HTML
+                if (typeof marked !== 'undefined') {
+                    marked.setOptions({
+                        gfm: true,
+                        breaks: true,
+                        sanitize: false, // This is crucial - don't sanitize HTML content
+                        renderer: new marked.Renderer()
+                    });
+                    console.log('Marked library loaded and configured');
+                }
+            };
         </script>
     </head>
     <body>
@@ -1003,11 +1151,8 @@ export function getChatWebviewContent(config: any): string {
                         msg.classList.remove('streaming');
                     });
                 } else if (message.command === 'streamMessage') {
-                    console.log('Stream message content:', {
-                        content: message.content,
-                        newMessage: message.newMessage,
-                        done: message.done
-                    });
+                    console.log('Stream message chunk:', message.content);
+                    console.log('Contains think tag:', message.content.includes('<think>') || message.content.includes('</think>'));
                     
                     if (message.newMessage) {
                         currentConversationId = message.conversationId;
@@ -1021,19 +1166,75 @@ export function getChatWebviewContent(config: any): string {
                             const newText = currentText + message.content;
                             messageDiv.setAttribute('data-markdown-content', newText);
                             
-                            // 使用相同的 marked 配置
-                            const markedOptions = {
-                                breaks: true,
-                                gfm: true,
-                                xhtml: true,
-                            };
+                            console.log('Stream update - newText:', newText);
+                            console.log('Contains think tags:', newText.includes('<think>'));
                             
-                            messageDiv.innerHTML = marked.parse(processMessage(newText), markedOptions);
+                            // 处理转义字符
+                            let processedContent = newText.replace(/\\\\u003c/g, '<')
+                                                       .replace(/\\\\u003e/g, '>');
                             
-                            // 如果存在代码块，确保滚动到底部
-                            if (messageDiv.querySelector('pre')) {
-                                chatContainer.scrollTop = chatContainer.scrollHeight;
+                            // 检查是否包含think标签
+                            if (processedContent.includes('<think>') && processedContent.includes('</think>')) {
+                                console.log('Stream message contains complete think tags');
+                                
+                                // 分离思考内容和实际回复
+                                const thinkMatch = processedContent.match(/<think>([\\s\\S]*?)<\\/think>/);
+                                
+                                if (thinkMatch) {
+                                    const thinkContent = thinkMatch[1];
+                                    const remainingContent = processedContent.replace(/<think>[\\s\\S]*?<\\/think>/, '').trim();
+                                    
+                                    // 生成唯一ID
+                                    const thinkId = 'think-' + Math.random().toString(36).substr(2, 9);
+                                    
+                                    // 先添加思考部分
+                                    const thinkHtml = [
+                                        '<div class="think-section">',
+                                        '    <div class="think-header" data-think-id="' + thinkId + '">',
+                                        '        <span class="think-toggle">▼</span>',
+                                        '        <span>思考过程</span>',
+                                        '    </div>',
+                                        '    <div class="think-content" id="' + thinkId + '">' + thinkContent.replace(/\\n/g, '<br>') + '</div>',
+                                        '</div>'
+                                    ].join('');
+                                    
+                                    // 然后添加实际回复部分
+                                    const markedOptions = {
+                                        breaks: true,
+                                        gfm: true,
+                                        xhtml: true
+                                    };
+                                    
+                                    messageDiv.innerHTML = thinkHtml;
+                                    
+                                    if (remainingContent) {
+                                        const responseDiv = document.createElement('div');
+                                        responseDiv.className = 'response-content';
+                                        responseDiv.innerHTML = marked.parse(remainingContent, markedOptions);
+                                        messageDiv.appendChild(responseDiv);
+                                    }
+                                    
+                                    // 在下一个事件循环中初始化思考部分
+                                    setTimeout(() => initThinkSection(thinkId), 0);
+                                } else {
+                                    // 如果未正确匹配，则按常规处理
+                                    messageDiv.innerHTML = marked.parse(processedContent, {
+                                        breaks: true,
+                                        gfm: true,
+                                        xhtml: true
+                                    });
+                                }
+                            } else {
+                                // 部分更新或没有think标签时，按常规处理
+                                messageDiv.innerHTML = marked.parse(processedContent, {
+                                    breaks: true,
+                                    gfm: true,
+                                    xhtml: true
+                                });
                             }
+                            
+                            // 滚动到底部
+                            chatContainer.scrollTop = chatContainer.scrollHeight;
                         }
                     }
 
