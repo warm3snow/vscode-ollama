@@ -310,17 +310,113 @@ export function activate(context: vscode.ExtensionContext) {
 							modelName: config.model
 						});
 					} else if (message.command === 'resetContext') {
-						// 获取当前配置以获取系统提示词
-						const currentConfig = getOllamaConfig();
-						// 重新初始化消息历史，只包含系统提示词
-						messageHistory = [{ 
-							role: 'system', 
-							content: currentConfig.systemPrompt 
-						}];
+						// 重新初始化消息历史，不包含系统提示词
+						messageHistory = [];
+						console.log('Reset message history:', messageHistory);
 						return;
 					} else if (message.command === 'sendMessage') {
 						try {
 							const currentConfig = getOllamaConfig();
+							// 初始化消息数组
+							let messages: Array<{role: string, content: string}> = [];
+							
+							// 检查是否是 reset 命令
+							if (message.content.startsWith('/reset')) {
+								// 发送空消息数组
+								const response = await fetch(`${currentConfig.baseUrl}/api/chat`, {
+									method: 'POST',
+									headers: {
+										'Content-Type': 'application/json',
+									},
+									body: JSON.stringify({
+										model: currentConfig.model,
+										messages: [],
+										stream: true
+									})
+								});
+
+								if (!response.ok) {
+									throw new Error(`Failed to send message: ${response.statusText}`);
+								}
+
+								// 其他处理保持不变
+								const reader = response.body?.getReader();
+								if (!reader) {
+									throw new Error('Failed to get response reader');
+								}
+								currentReader = reader;
+								const decoder = new TextDecoder();
+								let content = '';
+
+								// 修改流式消息处理部分
+								try {
+									while (true) {
+										const { value, done } = await currentReader.read();
+										if (done) break;
+
+										const chunk = decoder.decode(value);
+										const lines = chunk.split('\n').filter(line => line.trim());
+										
+										if (!panel) {
+											return;
+										}
+
+										for (const line of lines) {
+											const data = JSON.parse(line) as OllamaChatResponse;
+											content += data.message.content;
+											
+											panel.webview.postMessage({
+												command: 'streamMessage',
+												content: data.message.content,
+												done: false,
+												newMessage: !lastMessageDiv,
+												conversationId: currentConversationId
+											});
+											lastMessageDiv = true;
+
+											if (data.done) {
+												panel.webview.postMessage({
+													command: 'streamMessage',
+													content: '',
+													done: true,
+													newMessage: false,
+													conversationId: currentConversationId
+												});
+												lastMessageDiv = false;
+												content = '';
+												currentConversationId = null;
+											}
+										}
+									}
+								} catch (error: unknown) {
+									if (error instanceof Error && error.name === 'AbortError') {
+										if (panel) {
+											panel.webview.postMessage({
+												command: 'streamMessage',
+												content: '\n[已终止生成]',
+												done: true,
+												newMessage: false,
+												conversationId: currentConversationId
+											});
+											currentConversationId = null;
+											lastMessageDiv = false;
+										}
+									} else {
+										throw error;
+									}
+								}
+
+								// 更新模型名称
+								if (panel) {
+									panel.webview.postMessage({
+										command: 'updateModelName',
+										modelName: currentConfig.model
+									});
+								}
+								return;
+							}
+
+							// 非 reset 命令的原有逻辑
 							const searchProvider = vscode.workspace.getConfiguration('vscode-ollama').get('searchProvider', DEFAULT_SEARCH_PROVIDER);
 							
 							console.log('Message received:', {
@@ -330,11 +426,15 @@ export function activate(context: vscode.ExtensionContext) {
 								rawMessage: message
 							});
 
-							const messages = message.resetContext ? [] : manageMessageHistory([...messageHistory], currentConfig.maxTokens);
-
-							// 如果是重置上下文或者消息历史为空，添加系统提示词
-							if (message.resetContext || messages.length === 0) {
-								messages.push({ role: 'system', content: currentConfig.systemPrompt });
+							// 初始化消息数组，确保至少包含系统提示词
+							const systemMessage = messageHistory.find(msg => msg.role === 'system');
+							if (systemMessage) {
+								messages.push(systemMessage);
+							} else {
+								messages.push({ 
+									role: 'system', 
+									content: currentConfig.systemPrompt 
+								});
 							}
 
 							if (message.webSearch) {
@@ -443,10 +543,10 @@ export function activate(context: vscode.ExtensionContext) {
 										lastMessageDiv = true;
 
 										if (data.done) {
-											messageHistory = manageMessageHistory([
-												...messages,
-												{ role: 'assistant', content: content }
-											], currentConfig.maxTokens);
+											// 更新消息历史
+											messages.push({ role: 'assistant', content });
+											messageHistory = manageMessageHistory(messages, currentConfig.maxTokens);
+											
 											panel.webview.postMessage({
 												command: 'streamMessage',
 												content: '',

@@ -42,27 +42,29 @@ export const searchWeb = async (_provider: string, query: string): Promise<{resu
             try {
                 console.log(`Fetching content for: ${result.url}`);
                 const content = await fetchPageContent(result.url);
-                return content;
+                return { success: true, content, url: result.url };
             } catch (error) {
                 console.error(`Failed to fetch content for ${result.url}:`, error);
-                return '';
+                return { success: false, content: '', url: result.url };
             }
         });
 
         // 等待所有内容获取完成
-        const contents = await Promise.all(contentPromises);
+        const contentResults = await Promise.all(contentPromises);
         console.log('All page contents fetched');
 
-        // 准备包含网页内容的上下文
+        // 准备包含网页内容的上下文，只包含成功获取的内容
         let context = "Here are the search results with their contents:\n\n";
         results.forEach((result, index) => {
-            context += `[${index + 1}] Title: ${result.title}\n`;
-            context += `    URL: ${result.url}\n`;
-            context += `    Summary: ${result.snippet}\n`;
-            if (contents[index]) {
-                context += `    Content: ${contents[index]}\n`;
+            const contentResult = contentResults[index];
+            context += `[webpage ${index + 1} begin]\n`;
+            context += `Title: ${result.title}\n`;
+            context += `URL: ${result.url}\n`;
+            context += `Summary: ${result.snippet}\n`;
+            if (contentResult.success && contentResult.content) {
+                context += `Content: ${contentResult.content}\n`;
             }
-            context += '\n';
+            context += `[webpage ${index + 1} end]\n\n`;
         });
 
         console.log('Search context prepared for LLM analysis');
