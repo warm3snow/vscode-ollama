@@ -2,7 +2,7 @@
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
 import { getSettingsWebviewContent } from './webview/settingsWebview';
-import { OllamaModelsResponse } from './types';
+import { OllamaModelsResponse, SearchResult } from './types';
 import { getChatWebviewContent } from './webview/chatWebview';
 import { searchWeb } from './webSearch';
 
@@ -293,67 +293,14 @@ export function activate(context: vscode.ExtensionContext) {
 									const searchResults = await searchWeb('bing', message.content);
 									console.log('Search results received:', searchResults);
 
-									if (searchResults.length > 0) {
-										// 获取前三个搜索结果的页面内容
-										const contentPromises = searchResults.slice(0, 3).map(async (result) => {
-											try {
-												const response = await fetch(result.url, { 
-													headers: {
-														'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/91.0.4472.124 Safari/537.36'
-													}
-												});
-												
-												if (!response.ok) {
-													return {
-														title: result.title,
-														snippet: result.snippet,
-														url: result.url,
-														content: ''
-													};
-												}
-
-												const html = await response.text();
-												// 简单提取文本内容
-												const content = html
-													.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-													.replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
-													.replace(/<[^>]+>/g, ' ')
-													.replace(/\s+/g, ' ')
-													.trim()
-													.slice(0, 2000); // 限制内容长度
-
-												return {
-													title: result.title,
-													snippet: result.snippet,
-													url: result.url,
-													content
-												};
-											} catch (error) {
-												console.error(`Failed to fetch content from ${result.url}:`, error);
-												return {
-													title: result.title,
-													snippet: result.snippet,
-													url: result.url,
-													content: ''
-												};
-											}
-										});
-
-										const contents = await Promise.all(contentPromises);
-
-										const searchContext = `Based on the Bing search results for "${message.content}", here is the information from top 3 results:\n\n` + 
-											contents.map((result, index) => 
-												`[Source ${index + 1}]\nTitle: ${result.title}\nURL: ${result.url}\n\nSnippet: ${result.snippet}\n\nContent: ${result.content}\n`
-											).join('\n---\n') + 
-											`\n\nBased on these search results, please provide a comprehensive answer to the user's question: "${message.content}". ` +
-											`If the search results don't contain enough information, please acknowledge this limitation.`;
-
-										console.log('Search context prepared for LLM analysis');
-
+									if (searchResults.results.length > 0) {
+										// 直接使用 searchResults.context，它已经包含了网页内容
 										messages.push({ 
 											role: 'system', 
-											content: searchContext
+											content: searchResults.context
 										});
+										
+										console.log('Search context with webpage contents added to messages: ', messages);
 									} else {
 										console.log('No search results found');
 										panel.webview.postMessage({

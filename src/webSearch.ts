@@ -5,13 +5,68 @@ import { getOllamaConfig } from './extension';
 const RETRY_ATTEMPTS = 3;
 const RETRY_DELAY = 1000;
 
+// 添加内容大小限制常量
+const MAX_CONTENT_LENGTH = 1000; // 每个链接内容最大字符数
+
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-export const searchWeb = async (_provider: string, query: string): Promise<SearchResult[]> => {
+// 添加一个函数来格式化搜索结果供LLM分析
+function prepareSearchContextForLLM(results: SearchResult[], contents: string[]): string {
+    if (results.length === 0) {
+        return "No search results found.";
+    }
+
+    let context = "Here are the search results with their contents:\n\n";
+    results.forEach((result, index) => {
+        context += `[${index + 1}] Title: ${result.title}\n`;
+        context += `    URL: ${result.url}\n`;
+        context += `    Summary: ${result.snippet}\n`;
+        if (contents[index]) {
+            context += `    Content: ${contents[index]}\n`;
+        }
+        context += '\n';
+    });
+
+    return context;
+}
+
+export const searchWeb = async (_provider: string, query: string): Promise<{results: SearchResult[], context: string}> => {
     console.log(`Starting web search with Bing, query: ${query}`);
     
     try {
-        return await webBingSearch(query);
+        const results = await webBingSearch(query);
+        console.log('Search results fetched, now fetching page contents...');
+        
+        // 获取每个搜索结果的网页内容
+        const contentPromises = results.map(async (result) => {
+            try {
+                console.log(`Fetching content for: ${result.url}`);
+                const content = await fetchPageContent(result.url);
+                return content;
+            } catch (error) {
+                console.error(`Failed to fetch content for ${result.url}:`, error);
+                return '';
+            }
+        });
+
+        // 等待所有内容获取完成
+        const contents = await Promise.all(contentPromises);
+        console.log('All page contents fetched');
+
+        // 准备包含网页内容的上下文
+        let context = "Here are the search results with their contents:\n\n";
+        results.forEach((result, index) => {
+            context += `[${index + 1}] Title: ${result.title}\n`;
+            context += `    URL: ${result.url}\n`;
+            context += `    Summary: ${result.snippet}\n`;
+            if (contents[index]) {
+                context += `    Content: ${contents[index]}\n`;
+            }
+            context += '\n';
+        });
+
+        console.log('Search context prepared for LLM analysis');
+        return { results, context };
     } catch (error) {
         console.error('Search failed:', error);
         throw error;
@@ -83,7 +138,7 @@ async function webBingSearch(query: string): Promise<SearchResult[]> {
     return [];
 }
 
-async function fetchPageContent(url: string): Promise<string | null> {
+async function fetchPageContent(url: string): Promise<string> {
     try {
         const response = await fetch(url, {
             headers: {
@@ -107,9 +162,12 @@ async function fetchPageContent(url: string): Promise<string | null> {
             .replace(/\s+/g, ' ')
             .trim();
 
-        return cleanText;
+        // 限制内容长度
+        return cleanText.length > MAX_CONTENT_LENGTH 
+            ? cleanText.substring(0, MAX_CONTENT_LENGTH) + '...'
+            : cleanText;
     } catch (error) {
         console.error('Error fetching page content:', error);
-        return null;
+        return '';
     }
 } 
