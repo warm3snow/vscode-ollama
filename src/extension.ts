@@ -293,17 +293,19 @@ export function activate(context: vscode.ExtensionContext) {
 									console.log('Search results received:', searchResults);
 
 									if (searchResults.length > 0) {
-										const searchContext = `Web search results for "${message.content}":\n\n` + 
+										const searchContext = `Based on the web search results for "${message.content}", here is the relevant information:\n\n` + 
 											searchResults.map((result, index) => 
-												`[${index + 1}] ${result.title}\nURL: ${result.url}\n${result.snippet}\n`
-											).join('\n');
+												`[Source ${index + 1}] ${result.title}\n${result.snippet}\nURL: ${result.url}\n`
+											).join('\n') + 
+											`\nAnalyze the above information and provide a comprehensive answer to the user's question: "${message.content}". ` +
+											`Focus on accuracy and relevance. If the search results don't contain enough information to fully answer the question, ` +
+											`acknowledge this limitation in your response.`;
 
 										console.log('Search context created:', searchContext);
 
 										messages.push({ 
 											role: 'system', 
-											content: `Here are the latest web search results:\n${searchContext}\n\n` +
-													`Please use this information to help answer the user's question.`
+											content: searchContext
 										});
 									} else {
 										console.log('No search results found');

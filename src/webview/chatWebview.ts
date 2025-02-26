@@ -164,7 +164,7 @@ export function getChatWebviewContent(config: any): string {
             
             const prefixDiv = document.createElement('div');
             prefixDiv.className = 'message-prefix';
-            prefixDiv.textContent = isUser ? '你' : '- ' + currentModelName;
+            prefixDiv.textContent = isUser ? '你' : currentModelName;
             messageDiv.appendChild(prefixDiv);
             
             const contentDiv = document.createElement('div');
