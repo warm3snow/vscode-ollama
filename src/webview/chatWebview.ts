@@ -164,7 +164,7 @@ export function getChatWebviewContent(config: any): string {
             
             const prefixDiv = document.createElement('div');
             prefixDiv.className = 'message-prefix';
-            prefixDiv.textContent = isUser ? '- 我' : '- ' + currentModelName;
+            prefixDiv.textContent = isUser ? '你' : '- ' + currentModelName;
             messageDiv.appendChild(prefixDiv);
             
             const contentDiv = document.createElement('div');
@@ -311,28 +311,30 @@ export function getChatWebviewContent(config: any): string {
                 display: inline-flex;
                 align-items: center;
                 justify-content: center;
-                width: 24px;
-                height: 24px;
+                width: 20px;
+                height: 20px;
                 border-radius: 50%;
                 margin-right: 6px;
                 background-position: center;
                 background-size: cover;
-                font-size: 14px;
+                font-size: 13px;
                 line-height: 1;
-                box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
             }
+            
             .user-message .message-prefix::before {
                 order: 2; /* 将用户头像放在文字右边 */
                 margin-right: 0;
                 margin-left: 6px;
-                background-color: rgba(255, 255, 255, 0.2);
-                border: 1px solid rgba(255, 255, 255, 0.3);
+                color: rgba(var(--vscode-textLink-foreground-rgb), 0.7); /* 更柔和的颜色 */
                 content: '👤';
+                opacity: 0.8;
             }
+            
             .assistant-message .message-prefix::before {
-                background-color: var(--vscode-textLink-foreground);
-                color: white;
+                background-color: transparent;
+                color: var(--vscode-textLink-foreground);
                 content: '🤖';
+                opacity: 0.8;
             }
             .message-content {
                 margin-left: 0;
@@ -352,7 +354,10 @@ export function getChatWebviewContent(config: any): string {
                 flex-direction: column;
             }
             .message:hover {
-                box-shadow: 0 3px 8px rgba(0, 0, 0, 0.15);
+                box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+            }
+            .user-message:hover {
+                background-color: rgba(var(--vscode-textLink-foreground-rgb), 0.2);
             }
             .input-wrapper {
                 position: relative;
@@ -897,28 +902,28 @@ export function getChatWebviewContent(config: any): string {
             }
 
             .user-message {
-                color: var(--vscode-foreground);
                 margin-left: auto; /* 用户消息靠右 */
                 margin-right: 0;
-                background-color: var(--vscode-button-background);
+                background-color: rgba(var(--vscode-textLink-foreground-rgb), 0.15); /* 更柔和的背景色 */
                 border-radius: 18px 18px 4px 18px;
-                box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
-                padding: 14px 18px; /* 增加内边距 */
+                box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+                padding: 14px 18px;
+                border: 1px solid rgba(var(--vscode-textLink-foreground-rgb), 0.2); /* 添加淡边框 */
             }
             
             .user-message .message-content {
-                color: white; /* 强制使用白色文本，确保可见性 */
-                font-size: 1.05em; /* 稍微增大字体 */
-                font-weight: 500; /* 稍微加粗 */
-                text-shadow: 0 1px 1px rgba(0, 0, 0, 0.1); /* 添加文字阴影增强可读性 */
-                letter-spacing: 0.01em; /* 增加字间距 */
+                color: var(--vscode-foreground); /* 使用主题的标准文字颜色 */
+                font-size: 1.05em;
+                font-weight: normal;
+                letter-spacing: 0.01em;
             }
             
             .user-message .message-prefix {
                 align-self: flex-end; /* 用户消息前缀靠右 */
-                color: rgba(255, 255, 255, 0.95); /* 更明确的白色，但略微透明 */
+                color: var(--vscode-descriptionForeground); /* 使用描述文字颜色 */
                 font-weight: 500;
-                margin-bottom: 8px; /* 增加与内容的间距 */
+                margin-bottom: 8px;
+                opacity: 0.8;
             }
 
             /* 欢迎消息样式优化 */
