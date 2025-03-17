@@ -134,6 +134,21 @@ export function getOllamaConfig(): OllamaConfig {
 	};
 }
 
+interface WebSearchConfig {
+	enabled: boolean;
+	cacheTimeout: number;
+	requestsPerMinute: number;
+}
+
+function getWebSearchConfig(): WebSearchConfig {
+	const config = vscode.workspace.getConfiguration('vscode-ollama');
+	return {
+		enabled: config.get('webSearch.enabled') ?? true,
+		cacheTimeout: config.get('webSearch.cacheTimeout') ?? 60,
+		requestsPerMinute: config.get('webSearch.requestsPerMinute') ?? 10
+	};
+}
+
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
 export function activate(context: vscode.ExtensionContext) {
@@ -438,6 +453,15 @@ export function activate(context: vscode.ExtensionContext) {
 							}
 
 							if (message.webSearch) {
+								const searchConfig = getWebSearchConfig();
+								if (!searchConfig.enabled) {
+									panel.webview.postMessage({
+										command: 'searchStatus',
+										status: 'Web search is disabled in settings'
+									});
+									return;
+								}
+
 								try {
 									panel.webview.postMessage({
 										command: 'searchStatus',

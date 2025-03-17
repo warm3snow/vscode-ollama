@@ -1,6 +1,8 @@
 import fetch from 'node-fetch';
 import { SearchResult } from './types';
 import { getOllamaConfig } from './extension';
+import { CacheService } from './services/cacheService';
+import { RateLimiter } from './services/rateLimiter';
 
 const RETRY_ATTEMPTS = 3;
 const RETRY_DELAY = 1000;
@@ -30,11 +32,26 @@ function prepareSearchContextForLLM(results: SearchResult[], contents: string[])
     return context;
 }
 
+// 初始化服务
+const searchCache = new CacheService<{results: SearchResult[], context: string}>(60); // 60 minutes TTL
+const rateLimiter = new RateLimiter(60000, 10); // 10 requests per minute
+const pageCache = new CacheService<string>(1440); // 24 hours TTL for page content
+
 export const searchWeb = async (_provider: string, query: string): Promise<{results: SearchResult[], context: string}> => {
-    console.log(`Starting web search with Bing, query: ${query}`);
+    console.log(`Starting web search, query: ${query}`);
+    
+    // 检查缓存
+    const cacheKey = `${_provider}:${query}`;
+    const cachedResults = searchCache.get(cacheKey);
+    if (cachedResults) {
+        console.log('Returning cached results');
+        return cachedResults;
+    }
+
+    // 检查限流
+    await rateLimiter.waitForAvailability();
     
     try {
-        // 获取搜索结果
         const results = await webBingSearch(query);
         if (results.length === 0) {
             return { 
@@ -43,10 +60,18 @@ export const searchWeb = async (_provider: string, query: string): Promise<{resu
             };
         }
 
-        // 获取每个搜索结果的网页内容
+        // 获取页面内容（使用缓存）
         const contentPromises = results.slice(0, 3).map(async (result) => {
+            const cachedContent = pageCache.get(result.url);
+            if (cachedContent !== null) {
+                return cachedContent;
+            }
+
             try {
                 const content = await fetchPageContent(result.url);
+                if (content) {
+                    pageCache.set(result.url, content);
+                }
                 return content;
             } catch (error) {
                 console.error(`Failed to fetch content for ${result.url}:`, error);
@@ -55,12 +80,16 @@ export const searchWeb = async (_provider: string, query: string): Promise<{resu
         });
 
         const contents = await Promise.all(contentPromises);
+        const searchResult = {
+            results,
+            context: prepareSearchContextForLLM(results, contents)
+        };
 
-        // 使用新的格式化函数准备上下文
-        const context = prepareSearchContextForLLM(results, contents);
+        // 缓存搜索结果
+        searchCache.set(cacheKey, searchResult);
 
-        return { results, context };
-    } catch (error) {
+        return searchResult;
+    } catch (error: unknown) {
         console.error('Search failed:', error);
         throw error;
     }
@@ -131,8 +160,12 @@ async function webBingSearch(query: string): Promise<SearchResult[]> {
     return [];
 }
 
-// 改进网页内容获取函数
+// 改进的网页内容获取函数，添加延迟
 async function fetchPageContent(url: string): Promise<string> {
+    // 添加随机延迟，避免过快请求
+    const delay = Math.random() * 1000 + 500; // 500-1500ms delay
+    await new Promise(resolve => setTimeout(resolve, delay));
+
     try {
         const response = await fetch(url, {
             headers: {
@@ -147,21 +180,23 @@ async function fetchPageContent(url: string): Promise<string> {
         }
 
         const html = await response.text();
-        
-        // 提取主要文本内容并清理
-        let cleanText = html
-            .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-            .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
-            .replace(/<[^>]+>/g, ' ')
-            .replace(/\s+/g, ' ')
-            .trim();
-
-        // 限制内容长度
-        return cleanText.length > MAX_CONTENT_LENGTH 
-            ? cleanText.substring(0, MAX_CONTENT_LENGTH) + '...'
-            : cleanText;
+        return cleanHtml(html);
     } catch (error) {
         console.error(`Error fetching ${url}:`, error);
         return '';
     }
+}
+
+// HTML清理函数
+function cleanHtml(html: string): string {
+    const cleanText = html
+        .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+        .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+    return cleanText.length > MAX_CONTENT_LENGTH 
+        ? cleanText.substring(0, MAX_CONTENT_LENGTH) + '...'
+        : cleanText;
 } 
