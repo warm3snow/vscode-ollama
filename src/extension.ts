@@ -439,45 +439,45 @@ export function activate(context: vscode.ExtensionContext) {
 
 							if (message.webSearch) {
 								try {
-									console.log('Starting web search with Bing...');
-									// 强制使用 bing 作为搜索引擎
-									const searchResults = await searchWeb('bing', message.content);
-									console.log('Search results received:', searchResults);
+									panel.webview.postMessage({
+										command: 'searchStatus',
+										status: 'Searching...'
+									});
 
+									const searchResults = await searchWeb('bing', message.content);
+									
 									if (searchResults.results.length > 0) {
-										// 检测语言并选择相应的模板
-										const isChineseQuery = isChineseContent(message.content);
+										// 检测语言并选择模板
+										const isChineseQuery = /[\u4e00-\u9fa5]/.test(message.content);
 										const template = isChineseQuery ? search_answer_zh_template : search_answer_en_template;
 										
-										// 获取当前日期
-										const currentDate = new Date().toLocaleDateString(
-											isChineseQuery ? 'zh-CN' : 'en-US',
-											{ year: 'numeric', month: 'long', day: 'numeric' }
-										);
-										
-										// 构建系统消息
+										// 构建带有搜索结果的系统消息
 										const systemMessage = template
 											.replace('{search_results}', searchResults.context)
-											.replace('{cur_date}', currentDate)
+											.replace('{cur_date}', new Date().toLocaleDateString())
 											.replace('{question}', message.content);
 										
+										// 添加到消息历史
 										messages.push({ 
-											role: 'user', 
-											content: systemMessage
+											role: 'system', 
+											content: systemMessage 
 										});
 										
+										panel.webview.postMessage({
+											command: 'searchStatus',
+											status: 'Search completed'
+										});
 									} else {
-										console.log('No search results found');
 										panel.webview.postMessage({
 											command: 'searchStatus',
 											status: 'No results found'
 										});
 									}
-								} catch (error) {
-									console.error('Web search failed:', error);
+								} catch (error: unknown) {
+									console.error('Search failed:', error);
 									panel.webview.postMessage({
 										command: 'searchStatus',
-										status: 'Search failed'
+										status: 'Search failed: ' + (error instanceof Error ? error.message : 'Unknown error')
 									});
 								}
 							}

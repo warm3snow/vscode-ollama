@@ -34,40 +34,31 @@ export const searchWeb = async (_provider: string, query: string): Promise<{resu
     console.log(`Starting web search with Bing, query: ${query}`);
     
     try {
+        // 获取搜索结果
         const results = await webBingSearch(query);
-        console.log('Search results fetched, now fetching page contents...');
-        
+        if (results.length === 0) {
+            return { 
+                results: [], 
+                context: "No search results found." 
+            };
+        }
+
         // 获取每个搜索结果的网页内容
-        const contentPromises = results.map(async (result) => {
+        const contentPromises = results.slice(0, 3).map(async (result) => {
             try {
-                console.log(`Fetching content for: ${result.url}`);
                 const content = await fetchPageContent(result.url);
-                return { success: true, content, url: result.url };
+                return content;
             } catch (error) {
                 console.error(`Failed to fetch content for ${result.url}:`, error);
-                return { success: false, content: '', url: result.url };
+                return '';
             }
         });
 
-        // 等待所有内容获取完成
-        const contentResults = await Promise.all(contentPromises);
-        console.log('All page contents fetched');
+        const contents = await Promise.all(contentPromises);
 
-        // 准备包含网页内容的上下文，只包含成功获取的内容
-        let context = "Here are the search results with their contents:\n\n";
-        results.forEach((result, index) => {
-            const contentResult = contentResults[index];
-            context += `[webpage ${index + 1} begin]\n`;
-            context += `Title: ${result.title}\n`;
-            context += `URL: ${result.url}\n`;
-            context += `Summary: ${result.snippet}\n`;
-            if (contentResult.success && contentResult.content) {
-                context += `Content: ${contentResult.content}\n`;
-            }
-            context += `[webpage ${index + 1} end]\n\n`;
-        });
+        // 使用新的格式化函数准备上下文
+        const context = prepareSearchContextForLLM(results, contents);
 
-        console.log('Search context prepared for LLM analysis');
         return { results, context };
     } catch (error) {
         console.error('Search failed:', error);
@@ -140,24 +131,25 @@ async function webBingSearch(query: string): Promise<SearchResult[]> {
     return [];
 }
 
+// 改进网页内容获取函数
 async function fetchPageContent(url: string): Promise<string> {
     try {
         const response = await fetch(url, {
             headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-                'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8'
-            }
+                'User-Agent': 'Mozilla/5.0 (compatible; SearchBot/1.0)',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            },
+            timeout: 5000
         });
 
         if (!response.ok) {
-            throw new Error(`Failed to fetch page: ${response.status}`);
+            throw new Error(`HTTP error! status: ${response.status}`);
         }
 
         const html = await response.text();
         
-        // 提取主要文本内容
-        const cleanText = html
+        // 提取主要文本内容并清理
+        let cleanText = html
             .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
             .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
             .replace(/<[^>]+>/g, ' ')
@@ -169,7 +161,7 @@ async function fetchPageContent(url: string): Promise<string> {
             ? cleanText.substring(0, MAX_CONTENT_LENGTH) + '...'
             : cleanText;
     } catch (error) {
-        console.error('Error fetching page content:', error);
+        console.error(`Error fetching ${url}:`, error);
         return '';
     }
 } 
