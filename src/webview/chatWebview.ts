@@ -1021,14 +1021,6 @@ export function getChatWebviewContent(config: any): string {
         <button class="menu-button" id="menu-button">⋯</button>
         <div class="menu" id="menu">
             <div class="menu-item" id="clear-chat">清除对话</div>
-            <div class="menu-separator"></div>
-            <div class="menu-item has-submenu">
-                主题切换
-                <div class="submenu">
-                    <div class="menu-item" id="theme-light">浅色主题</div>
-                    <div class="menu-item" id="theme-dark">深色主题</div>
-                </div>
-            </div>
         </div>
         <div class="input-wrapper">
             <button id="web-search">
