@@ -1020,16 +1020,16 @@ export function getChatWebviewContent(config: any): string {
         <div id="chat-container"></div>
         <button class="menu-button" id="menu-button">⋯</button>
         <div class="menu" id="menu">
-            <div class="menu-item" id="clear-chat">清除对话</div>
+            <div class="menu-item" id="clear-chat">Clear Chat</div>
         </div>
         <div class="input-wrapper">
             <button id="web-search">
-                <span>联网搜索</span>
+                <span>Web Search</span>
                 <span class="status">●</span>
             </button>
             <div id="input-container">
                 <textarea id="message-input" 
-                    placeholder="有问题，尽管问，shift+enter换行" 
+                    placeholder="Ask anything, shift+enter for newline" 
                     rows="1"></textarea>
                 <button id="send-button">Send</button>
             </div>
@@ -1140,24 +1140,21 @@ export function getChatWebviewContent(config: any): string {
                 if (welcomeMessage) {
                     chatContainer.appendChild(welcomeMessage.cloneNode(true));
                 } else {
-                    // 如果没有欢迎消息，创建新的
+                    // If not, create a new one
                     const welcomeDiv = document.createElement('div');
                     welcomeDiv.className = 'message assistant-message welcome-message';
-                    welcomeDiv.innerHTML = \`
-                        <div class="welcome-content">
-                            <h2 class="welcome-title">
-                                👋 Welcome to VSCode Ollama!
-                            </h2>
-                            <p class="welcome-text">
-                                <a href="https://github.com/warm3snow/vscode-ollama" class="welcome-link">
-                                [vscode-ollama] </a>是一款基于本地 Ollama 服务的 VS Code 扩展，支持模型配置、联网查询等多种特性。欢迎关注GitHub仓库并Star以支持开发者持续优化！
-                                <br><br>
-                                GitHub 仓库：<a href="https://github.com/warm3snow/vscode-ollama" class="welcome-link">
-                                    https://github.com/warm3snow/vscode-ollama
-                                </a>
-                            </p>
-                        </div>
-                    \`;
+                    welcomeDiv.innerHTML = [
+                        '<div class="welcome-content">',
+                        '  <h2 class="welcome-title">',
+                        '    👋 Welcome to VSCode Ollama!',
+                        '  </h2>',
+                        '  <p class="welcome-text">',
+                        '    <a href="https://github.com/warm3snow/vscode-ollama" class="welcome-link">[vscode-ollama]</a> is a VS Code extension based on local Ollama service, supporting model configuration, web search, and more. Star the GitHub repo to support ongoing development!',
+                        '    <br><br>',
+                        '    GitHub: <a href="https://github.com/warm3snow/vscode-ollama" class="welcome-link">https://github.com/warm3snow/vscode-ollama</a>',
+                        '  </p>',
+                        '</div>'
+                    ].join('');
                     chatContainer.appendChild(welcomeDiv);
                 }
 
@@ -1461,21 +1458,18 @@ export function getChatWebviewContent(config: any): string {
                     // 创建并添加欢迎消息
                     const welcomeDiv = document.createElement('div');
                     welcomeDiv.className = 'message assistant-message welcome-message';
-                    welcomeDiv.innerHTML = \`
-                        <div class="welcome-content">
-                            <h2 class="welcome-title">
-                                👋 Welcome to VSCode Ollama!
-                            </h2>
-                            <p class="welcome-text">
-                                <a href="https://github.com/warm3snow/vscode-ollama" class="welcome-link">
-                                [vscode-ollama] </a>是一款基于本地 Ollama 服务的 VS Code 扩展，支持模型配置、联网查询等多种特性。欢迎关注GitHub仓库并Star以支持开发者持续优化！
-                                <br><br>
-                                GitHub 仓库：<a href="https://github.com/warm3snow/vscode-ollama" class="welcome-link">
-                                    https://github.com/warm3snow/vscode-ollama
-                                </a>
-                            </p>
-                        </div>
-                    \`;
+                    welcomeDiv.innerHTML = [
+                        '<div class="welcome-content">',
+                        '  <h2 class="welcome-title">',
+                        '    👋 Welcome to VSCode Ollama!',
+                        '  </h2>',
+                        '  <p class="welcome-text">',
+                        '    <a href="https://github.com/warm3snow/vscode-ollama" class="welcome-link">[vscode-ollama]</a> is a VS Code extension based on local Ollama service, supporting model configuration, web search, and more. Star the GitHub repo to support ongoing development!',
+                        '    <br><br>',
+                        '    GitHub: <a href="https://github.com/warm3snow/vscode-ollama" class="welcome-link">https://github.com/warm3snow/vscode-ollama</a>',
+                        '  </p>',
+                        '</div>'
+                    ].join('');
                     chatContainer.appendChild(welcomeDiv);
                     chatContainer.scrollTop = chatContainer.scrollHeight;
                 } else if (message.command === 'updateModelName') {
