@@ -4,6 +4,12 @@ All notable changes to the "vscode-ollama" extension will be documented in this 
 
 Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
 
+
+## [1.2.1] - 2025-08-21
+
+### Changed
+- Translated chat homepage UI to English (welcome message, menu, input placeholder)
+
 ## [1.2.0] - 2025-02-26
 
 ### Added
