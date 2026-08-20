@@ -1,10 +1,15 @@
 // The module 'vscode' contains the VS Code extensibility API
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
+import * as path from 'path';
 import { getSettingsWebviewContent } from './webview/settingsWebview';
-import { OllamaModelsResponse, SearchResult } from './types';
+import { OllamaModelsResponse } from './types';
 import { getChatWebviewContent } from './webview/chatWebview';
 import { searchWeb } from './webSearch';
+import { runAgentLoop, isContinuePrompt } from './agent/agentLoop';
+import { createAgentTools } from './agent/tools';
+import { AgentCallbacks, AgentConfig, ConfirmRequest, OllamaMessage } from './agent/types';
+import { AgentSkill, loadSkillsFromDirectory } from './agent/skills';
 
 interface OllamaConfig {
 	baseUrl: string;
@@ -15,31 +20,87 @@ interface OllamaConfig {
 	systemPrompt: string;
 }
 
-// Add interface for chat response
-interface OllamaChatResponse {
-	model: string;
-	created_at: string;
-	message: {
-		role: string;
-		content: string;
-	};
-	done: boolean;
-	done_reason?: string;
-	total_duration?: number;
+interface ChatMessage {
+	role: string;
+	content: string;
 }
 
-// 在文件开头添加类型定义
-interface AbortError extends Error {
-	name: 'AbortError';
+/** 发起联网搜索并返回构造好的系统消息。失败/禁用/未启用时返回空数组。 */
+async function collectWebSearchContext(
+	panel: vscode.WebviewPanel,
+	message: { webSearch?: boolean; content: string }
+): Promise<ChatMessage[]> {
+	if (!message.webSearch) {
+		return [];
+	}
+
+	const searchConfig = getWebSearchConfig();
+	if (!searchConfig.enabled) {
+		panel.webview.postMessage({
+			command: 'searchStatus',
+			status: 'Web search is disabled in settings'
+		});
+		return [];
+	}
+
+	try {
+		panel.webview.postMessage({
+			command: 'searchStatus',
+			status: 'Searching...'
+		});
+
+		const searchResults = await searchWeb(message.content, {
+			provider: searchConfig.provider,
+			cacheTimeoutMinutes: searchConfig.cacheTimeout,
+			requestsPerMinute: searchConfig.requestsPerMinute
+		});
+
+		if (searchResults.results.length === 0) {
+			panel.webview.postMessage({
+				command: 'searchStatus',
+				status: 'No results found'
+			});
+			return [];
+		}
+
+		const isChineseQuery = /[\u4e00-\u9fa5]/.test(message.content);
+		const template = isChineseQuery ? search_answer_zh_template : search_answer_en_template;
+		const systemContent = template
+			.replace('{search_results}', searchResults.context)
+			.replace('{cur_date}', new Date().toLocaleDateString())
+			.replace('{question}', message.content);
+
+		panel.webview.postMessage({
+			command: 'searchStatus',
+			status: 'Search completed'
+		});
+
+		return [{ role: 'system', content: systemContent }];
+	} catch (error: unknown) {
+		console.error('Search failed:', error);
+		panel.webview.postMessage({
+			command: 'searchStatus',
+			status: 'Search failed: ' + (error instanceof Error ? error.message : 'Unknown error')
+		});
+		return [];
+	}
 }
 
-let settingsPanel: vscode.WebviewPanel | undefined = undefined;
-let currentReader: ReadableStreamDefaultReader<Uint8Array> | null = null;
-let lastMessageDiv: boolean = false;
-let currentConversationId: string | null = null;
+interface WebSearchConfig {
+	enabled: boolean;
+	cacheTimeout: number;
+	requestsPerMinute: number;
+	provider: string;
+}
 
-// 在文件开头添加默认搜索引擎配置
 const DEFAULT_SEARCH_PROVIDER = 'bing';
+const DEFAULT_BASE_URL = 'http://127.0.0.1:11434';
+const DEFAULT_MODEL = 'deepseek-r1:32b';
+const DEFAULT_MAX_TOKENS = 4096;
+const DEFAULT_KEEP_ALIVE = '5 minutes';
+const DEFAULT_PERFORMANCE_MODE = 'Base (Default)';
+const DEFAULT_SYSTEM_PROMPT =
+	'Given the following conversation, relevant context, and a follow up question, reply with an answer to the current question the user is asking. Return only your response to the question given the above information following the users instructions as needed.';
 
 // 添加搜索结果模板
 const search_answer_zh_template = `# 以下内容是基于用户发送的消息的搜索结果:
@@ -76,624 +137,673 @@ When responding, please keep the following points in mind:
 # The user's message is:
 {question}`;
 
-// 添加语言检测函数
-function isChineseContent(text: string): boolean {
-	// 使用正则表达式检测是否包含中文字符
-	const chinesePattern = /[\u4e00-\u9fa5]/;
-	return chinesePattern.test(text);
-}
-
-// 在文件顶部添加消息历史存储
-let messageHistory: Array<{role: string, content: string}> = [];
-
-// 添加一个函数来管理消息历史大小
-function manageMessageHistory(messages: Array<{role: string, content: string}>, maxTokens: number): Array<{role: string, content: string}> {
-	// 保留系统提示词
-	const systemMessage = messages.find(msg => msg.role === 'system');
-	let history = messages.filter(msg => msg.role !== 'system');
-	
-	// 粗略估计token数（每个字符约1个token）
-	let totalLength = systemMessage ? systemMessage.content.length : 0;
-	
-	// 从最新的消息开始保留
-	const managedHistory = [];
-	if (systemMessage) {
-		managedHistory.push(systemMessage);
-	}
-	
-	// 从最新的消息往前遍历
-	for (let i = history.length - 1; i >= 0; i--) {
-		const message = history[i];
-		const messageLength = message.content.length;
-		
-		// 如果添加这条消息后仍在限制内，则添加
-		if (totalLength + messageLength <= maxTokens) {
-			managedHistory.push(message);
-			totalLength += messageLength;
-		} else {
-			break;
-		}
-	}
-	
-	// 反转数组以保持正确的顺序（系统消息在前，最新消息在后）
-	return managedHistory.reverse();
-}
-
 // 将 getOllamaConfig 移到 activate 函数外部
 export function getOllamaConfig(): OllamaConfig {
 	const config = vscode.workspace.getConfiguration('vscode-ollama');
-	const defaultSystemPrompt = "Given the following conversation, relevant context, and a follow up question, reply with an answer to the current question the user is asking. Return only your response to the question given the above information following the users instructions as needed.";
-	
-	return {
-		baseUrl: config.get<string>('baseUrl') || 'http://127.0.0.1:11434',
-		model: config.get<string>('model') || 'deepseek-r1:32b',
-		maxTokens: config.get<number>('maxTokens') || 4096,
-		keepAlive: config.get<string>('keepAlive') || '5 minutes',
-		performanceMode: config.get<string>('performanceMode') || 'Base (Default)',
-		systemPrompt: config.get<string>('systemPrompt') || defaultSystemPrompt
-	};
-}
 
-interface WebSearchConfig {
-	enabled: boolean;
-	cacheTimeout: number;
-	requestsPerMinute: number;
+	return {
+		baseUrl: config.get<string>('baseUrl') || DEFAULT_BASE_URL,
+		model: config.get<string>('model') || DEFAULT_MODEL,
+		maxTokens: config.get<number>('maxTokens') || DEFAULT_MAX_TOKENS,
+		keepAlive: config.get<string>('keepAlive') || DEFAULT_KEEP_ALIVE,
+		performanceMode: config.get<string>('performanceMode') || DEFAULT_PERFORMANCE_MODE,
+		systemPrompt: config.get<string>('systemPrompt') || DEFAULT_SYSTEM_PROMPT
+	};
 }
 
 function getWebSearchConfig(): WebSearchConfig {
 	const config = vscode.workspace.getConfiguration('vscode-ollama');
 	return {
-		enabled: config.get('webSearch.enabled') ?? true,
-		cacheTimeout: config.get('webSearch.cacheTimeout') ?? 60,
-		requestsPerMinute: config.get('webSearch.requestsPerMinute') ?? 10
+		enabled: config.get<boolean>('webSearch.enabled', true),
+		cacheTimeout: config.get<number>('webSearch.cacheTimeout', 60),
+		requestsPerMinute: config.get<number>('webSearch.requestsPerMinute', 10),
+		provider: config.get<string>('searchProvider', DEFAULT_SEARCH_PROVIDER)
 	};
+}
+
+// 按 token 上限管理消息历史：保留系统提示词 + 最新的若干条消息（保持原有顺序）
+function manageMessageHistory(messages: ChatMessage[], maxTokens: number): ChatMessage[] {
+	const systemMessages = messages.filter(m => m.role === 'system');
+	const history = messages.filter(m => m.role !== 'system');
+
+	// 粗略估计token数（每个字符约1个token）
+	let totalLength = systemMessages.reduce((sum, m) => sum + m.content.length, 0);
+
+	// 从最新的消息开始保留，tail 用 unshift 保持“旧在前、新在后”的顺序
+	const tail: ChatMessage[] = [];
+	for (let i = history.length - 1; i >= 0; i--) {
+		const message = history[i];
+		if (totalLength + message.content.length > maxTokens) {
+			break;
+		}
+		tail.unshift(message);
+		totalLength += message.content.length;
+	}
+
+	return [...systemMessages, ...tail];
+}
+
+let currentReader: ReadableStreamDefaultReader<Uint8Array> | null = null;
+let activeConversationId: string | null = null;
+
+/**
+ * 向 Ollama 发起流式聊天请求并把增量内容转发给 webview。
+ * 使用行缓冲解析，避免 JSON 被 chunk 边界截断导致解析失败。
+ */
+async function streamChatResponse(
+	panel: vscode.WebviewPanel,
+	config: OllamaConfig,
+	conversationId: string,
+	messages: ChatMessage[],
+	onComplete?: (fullContent: string) => void
+): Promise<void> {
+	const url = `${config.baseUrl}/v1/chat/completions`;
+	let response: Response;
+	try {
+		response = await fetch(url, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+			},
+			body: JSON.stringify({
+				model: config.model,
+				messages,
+				stream: true,
+				max_tokens: config.maxTokens
+			})
+		});
+	} catch (e) {
+		const cause = e instanceof Error && (e as Error & { cause?: unknown }).cause ? ` (cause: ${String((e as Error & { cause?: unknown }).cause)})` : '';
+		throw new Error(`无法连接到 Ollama (${url}): ${e instanceof Error ? e.message : String(e)}${cause}`);
+	}
+
+	if (!response.ok) {
+		let detail = '';
+		try {
+			detail = (await response.text()).slice(0, 500);
+		} catch {
+			// 忽略
+		}
+		throw new Error(`Ollama request failed: ${response.status} ${response.statusText}${detail ? ` — ${detail}` : ''}`);
+	}
+
+	const reader = response.body?.getReader();
+	if (!reader) {
+		throw new Error('Failed to get response reader');
+	}
+	currentReader = reader;
+
+	const decoder = new TextDecoder();
+	let buffer = '';
+	let fullContent = '';
+	let isFirstChunk = true;
+
+	const postStream = (content: string, done: boolean) => {
+		panel.webview.postMessage({
+			command: 'streamMessage',
+			content,
+			done,
+			newMessage: !done && isFirstChunk,
+			conversationId
+		});
+		isFirstChunk = false;
+	};
+
+	const handleLine = (line: string) => {
+		if (!line) {
+			return;
+		}
+		// OpenAI 兼容 SSE 格式:"data: {...}" / "data: [DONE]"
+		if (!line.startsWith('data:')) {
+			return;
+		}
+		const payload = line.slice(5).trim();
+		if (!payload || payload === '[DONE]') {
+			return;
+		}
+		let data: { choices?: Array<{ delta?: { content?: string } }> };
+		try {
+			data = JSON.parse(payload);
+		} catch {
+			return;
+		}
+		const chunk = data.choices?.[0]?.delta?.content ?? '';
+		if (chunk) {
+			fullContent += chunk;
+			postStream(chunk, false);
+		}
+	};
+
+	try {
+		while (true) {
+			const { value, done } = await reader.read();
+			if (done) {
+				break;
+			}
+			buffer += decoder.decode(value, { stream: true });
+
+			let newlineIndex: number;
+			while ((newlineIndex = buffer.indexOf('\n')) >= 0) {
+				const line = buffer.slice(0, newlineIndex).trim();
+				buffer = buffer.slice(newlineIndex + 1);
+				handleLine(line);
+			}
+		}
+		// 处理流末尾残留的（无换行结尾的）内容
+		if (buffer.trim()) {
+			handleLine(buffer.trim());
+		}
+		// 流正常结束:触发完成回调并通知 webview
+		onComplete?.(fullContent);
+		fullContent = '';
+		postStream('', true);
+	} catch (error) {
+		if (error instanceof Error && error.name === 'AbortError') {
+			panel.webview.postMessage({
+				command: 'streamMessage',
+				content: '\n[已终止生成]',
+				done: true,
+				newMessage: false,
+				conversationId
+			});
+			return;
+		}
+		throw error;
+	} finally {
+		currentReader = null;
+	}
 }
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
 export function activate(context: vscode.ExtensionContext) {
-	try {
-		let panel: vscode.WebviewPanel | undefined;  // 声明在更高的作用域
+	let panel: vscode.WebviewPanel | undefined;
+	let settingsPanel: vscode.WebviewPanel | undefined;
+	let messageHistory: ChatMessage[] = [];
+	let pendingConfirmResolver: ((approved: boolean) => void) | null = null;
 
-		async function getAvailableModels(baseUrl: string): Promise<string[]> {
-			try {
-				const response = await fetch(`${baseUrl}/api/tags`);
-				if (!response.ok) {
-					throw new Error(`Failed to fetch models: ${response.statusText}`);
-				}
-				const data = await response.json() as OllamaModelsResponse;
-				return data.models.map(m => m.model);
-			} catch (error) {
-				const errorMessage = error instanceof Error ? error.message : String(error);
-				vscode.window.showErrorMessage(`Failed to fetch models: ${errorMessage}`);
-				return [];
-			}
+	// Agent 模式的多轮对话历史(独立于普通聊天的 messageHistory)。
+	// 每次调用 runAgentLoop 都会传入上一轮的 messages,以保持上下文连续;
+	// 循环结束后把最新 messages 回写,以便下一轮继续。
+	let agentMessageHistory: OllamaMessage[] = [];
+
+	/** Agent 模式下运行的辅助函数：构造回调、管理确认请求与流式输出。 */
+	async function runAgentChat(
+		webviewPanel: vscode.WebviewPanel,
+		config: OllamaConfig,
+		userContent: string,
+		conversationId: string,
+		planFirst: boolean,
+		extraSystemMessages?: OllamaMessage[]
+	): Promise<void> {
+		const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? '';
+		if (!workspaceRoot) {
+			vscode.window.showErrorMessage('Agent 模式需要一个打开的文件夹（workspace）。请先打开一个项目文件夹。');
+			webviewPanel.webview.postMessage({
+				command: 'streamMessage',
+				content: '\n[错误: Agent 模式需要打开一个工作区文件夹]',
+				done: true,
+				newMessage: false,
+				conversationId
+			});
+			return;
 		}
 
-		// Register settings command
-		let settingsCommand = vscode.commands.registerCommand('vscode-ollama.settings', () => {
-			if (settingsPanel) {
-				settingsPanel.reveal(vscode.ViewColumn.One);
-			} else {
-				settingsPanel = vscode.window.createWebviewPanel(
-					'ollamaSettings',
-					'Ollama Settings',
-					vscode.ViewColumn.One,
-					{
-						enableScripts: true,
-						retainContextWhenHidden: true
-					}
-				);
+		// 加载 skills:优先工作区的 skills/ 目录,其次是扩展自带的 skills/
+		const skills: AgentSkill[] = [];
+		for (const dir of [path.join(workspaceRoot, 'skills'), path.join(context.extensionPath, 'skills')]) {
+			skills.push(...loadSkillsFromDirectory(dir));
+		}
 
-				const updateWebview = () => {
-					if (settingsPanel) {
-						settingsPanel.webview.html = getSettingsWebviewContent(getOllamaConfig());
-					}
-				};
+		// 支持 /plan 前缀:强制启用 plan-first
+		let shouldPlanFirst = planFirst;
+		let userMessage = userContent;
+		if (userContent.trim().startsWith('/plan')) {
+			shouldPlanFirst = true;
+			userMessage = userContent.replace(/^\/plan\s*/, '').trim();
+		}
 
-				updateWebview();
+		const tools = createAgentTools();
 
-				settingsPanel.onDidDispose(
-					() => {
-						settingsPanel = undefined;
+		// web_search 作为工具注册:由 LLM 根据问题自主决定是否联网搜索,
+		// 而非每次请求都强制搜索。
+		if (getWebSearchConfig().enabled) {
+			tools.push({
+				name: 'web_search',
+				description:
+					'Search the web for up-to-date information. You MUST call this tool for any question that requires current/recent data (weather, news, prices, scores, latest versions, anything with "今天/今日/现在/最新/today/current/latest"). Do NOT refuse these questions by saying you lack real-time info — call this tool and use its results. For codebase questions, prefer grep / find / ls / read instead.',
+				parameters: {
+					type: 'object',
+					properties: {
+						query: { type: 'string', description: 'The search query to send to the search engine' }
 					},
-					null,
-					context.subscriptions
-				);
-
-				// 监听配置变化
-				context.subscriptions.push(
-					vscode.workspace.onDidChangeConfiguration(e => {
-						if (e.affectsConfiguration('vscode-ollama')) {
-							updateWebview();
-						}
-					})
-				);
-
-				// 处理 webview 消息
-				settingsPanel.webview.onDidReceiveMessage(
-					async message => {
-						switch (message.command) {
-							case 'openSettings':
-								vscode.commands.executeCommand('workbench.action.openSettings', 'vscode-ollama');
-								return;
-							case 'refreshModels':
-								try {
-									if (settingsPanel) {
-										const models = await getAvailableModels(message.baseUrl);
-										settingsPanel.webview.postMessage({
-											command: 'updateModels',
-											models: models
-										});
-									}
-								} catch (error) {
-									vscode.window.showErrorMessage(`Failed to refresh models: ${error}`);
-								}
-								return;
-							case 'saveSettings':
-								try {
-									const config = vscode.workspace.getConfiguration('vscode-ollama');
-									await config.update('baseUrl', message.settings.baseUrl, true);
-									await config.update('model', message.settings.model, true);
-									await config.update('maxTokens', message.settings.maxTokens, true);
-									await config.update('keepAlive', message.settings.keepAlive, true);
-									await config.update('performanceMode', message.settings.performanceMode, true);
-									await config.update('systemPrompt', message.settings.systemPrompt, true);
-									
-									vscode.window.showInformationMessage('Settings saved successfully');
-									settingsPanel?.webview.postMessage({ command: 'saveSuccess' });
-								} catch (error) {
-									vscode.window.showErrorMessage(`Failed to save settings: ${error}`);
-								}
-								return;
-							case 'testConnection':
-								try {
-									const response = await fetch(`${message.baseUrl}/api/version`);
-									if (response.ok) {
-										settingsPanel?.webview.postMessage({
-											command: 'testConnectionResult',
-											success: true
-										});
-									} else {
-										settingsPanel?.webview.postMessage({
-											command: 'testConnectionResult',
-											success: false
-										});
-									}
-								} catch (error) {
-									settingsPanel?.webview.postMessage({
-										command: 'testConnectionResult',
-										success: false
-									});
-								}
-								return;
-						}
-					},
-					undefined,
-					context.subscriptions
-				);
-			}
-		});
-
-		// Register refresh models command
-		const refreshModelsCommand = vscode.commands.registerCommand('vscode-ollama.refreshModels', async () => {
-			const config = getOllamaConfig();
-			try {
-				const models = await getAvailableModels(config.baseUrl);
-				vscode.window.showInformationMessage(`Found ${models.length} models`);
-			} catch (error) {
-				vscode.window.showErrorMessage(`Failed to refresh models: ${error}`);
-			}
-		});
-
-		// Register chat command
-		const chatCommand = vscode.commands.registerCommand('vscode-ollama.openChat', () => {
-			if (panel) {
-				panel.reveal(vscode.ViewColumn.One);
-				return;
-			}
-
-			panel = vscode.window.createWebviewPanel(
-				'ollamaChat',
-				'Ollama Chat',
-				vscode.ViewColumn.One,
-				{
-					enableScripts: true,
-					retainContextWhenHidden: true,
-					enableFindWidget: true,
-					enableCommandUris: true
-				}
-			);
-
-			const config = getOllamaConfig();
-			panel.webview.html = getChatWebviewContent(config);
-
-			// 在 webview 准备好后立即发送模型名称
-			panel.webview.onDidReceiveMessage(
-				async message => {
-					if (!panel) {
-						return;
-					}
-
-					if (message.command === 'webviewReady') {
-						// 发送欢迎消息和模型名称
-						panel.webview.postMessage({
-							command: 'welcomeMessage'
-						});
-						panel.webview.postMessage({
-							command: 'updateModelName',
-							modelName: config.model
-						});
-					} else if (message.command === 'resetContext') {
-						// 重新初始化消息历史，不包含系统提示词
-						messageHistory = [];
-						console.log('Reset message history:', messageHistory);
-						return;
-					} else if (message.command === 'sendMessage') {
-						try {
-							const currentConfig = getOllamaConfig();
-							// 初始化消息数组
-							let messages: Array<{role: string, content: string}> = [];
-							
-							// 检查是否是 reset 命令
-							if (message.content.startsWith('/reset')) {
-								// 发送空消息数组
-								const response = await fetch(`${currentConfig.baseUrl}/api/chat`, {
-									method: 'POST',
-									headers: {
-										'Content-Type': 'application/json',
-									},
-									body: JSON.stringify({
-										model: currentConfig.model,
-										messages: [],
-										stream: true
-									})
-								});
-
-								if (!response.ok) {
-									throw new Error(`Failed to send message: ${response.statusText}`);
-								}
-
-								// 其他处理保持不变
-								const reader = response.body?.getReader();
-								if (!reader) {
-									throw new Error('Failed to get response reader');
-								}
-								currentReader = reader;
-								const decoder = new TextDecoder();
-								let content = '';
-
-								// 修改流式消息处理部分
-								try {
-									while (true) {
-										const { value, done } = await currentReader.read();
-										if (done) break;
-
-										const chunk = decoder.decode(value);
-										const lines = chunk.split('\n').filter(line => line.trim());
-										
-										if (!panel) {
-											return;
-										}
-
-										for (const line of lines) {
-											const data = JSON.parse(line) as OllamaChatResponse;
-											content += data.message.content;
-											
-											panel.webview.postMessage({
-												command: 'streamMessage',
-												content: data.message.content,
-												done: false,
-												newMessage: !lastMessageDiv,
-												conversationId: currentConversationId
-											});
-											lastMessageDiv = true;
-
-											if (data.done) {
-												panel.webview.postMessage({
-													command: 'streamMessage',
-													content: '',
-													done: true,
-													newMessage: false,
-													conversationId: currentConversationId
-												});
-												lastMessageDiv = false;
-												content = '';
-												currentConversationId = null;
-											}
-										}
-									}
-								} catch (error: unknown) {
-									if (error instanceof Error && error.name === 'AbortError') {
-										if (panel) {
-											panel.webview.postMessage({
-												command: 'streamMessage',
-												content: '\n[已终止生成]',
-												done: true,
-												newMessage: false,
-												conversationId: currentConversationId
-											});
-											currentConversationId = null;
-											lastMessageDiv = false;
-										}
-									} else {
-										throw error;
-									}
-								}
-
-								// 更新模型名称
-								if (panel) {
-									panel.webview.postMessage({
-										command: 'updateModelName',
-										modelName: currentConfig.model
-									});
-								}
-								return;
-							}
-
-							// 非 reset 命令的原有逻辑
-							const searchProvider = vscode.workspace.getConfiguration('vscode-ollama').get('searchProvider', DEFAULT_SEARCH_PROVIDER);
-							
-							console.log('Message received:', {
-								content: message.content,
-								webSearch: message.webSearch,
-								searchProvider,
-								rawMessage: message
-							});
-
-							// 初始化消息数组，确保至少包含系统提示词
-							const systemMessage = messageHistory.find(msg => msg.role === 'system');
-							if (systemMessage) {
-								messages.push(systemMessage);
-							} else {
-								messages.push({ 
-									role: 'system', 
-									content: currentConfig.systemPrompt 
-								});
-							}
-
-							if (message.webSearch) {
-								const searchConfig = getWebSearchConfig();
-								if (!searchConfig.enabled) {
-									panel.webview.postMessage({
-										command: 'searchStatus',
-										status: 'Web search is disabled in settings'
-									});
-									return;
-								}
-
-								try {
-									panel.webview.postMessage({
-										command: 'searchStatus',
-										status: 'Searching...'
-									});
-
-									const searchResults = await searchWeb('bing', message.content);
-									
-									if (searchResults.results.length > 0) {
-										// 检测语言并选择模板
-										const isChineseQuery = /[\u4e00-\u9fa5]/.test(message.content);
-										const template = isChineseQuery ? search_answer_zh_template : search_answer_en_template;
-										
-										// 构建带有搜索结果的系统消息
-										const systemMessage = template
-											.replace('{search_results}', searchResults.context)
-											.replace('{cur_date}', new Date().toLocaleDateString())
-											.replace('{question}', message.content);
-										
-										// 添加到消息历史
-										messages.push({ 
-											role: 'system', 
-											content: systemMessage 
-										});
-										
-										panel.webview.postMessage({
-											command: 'searchStatus',
-											status: 'Search completed'
-										});
-									} else {
-										panel.webview.postMessage({
-											command: 'searchStatus',
-											status: 'No results found'
-										});
-									}
-								} catch (error: unknown) {
-									console.error('Search failed:', error);
-									panel.webview.postMessage({
-										command: 'searchStatus',
-										status: 'Search failed: ' + (error instanceof Error ? error.message : 'Unknown error')
-									});
-								}
-							}
-
-							// 添加用户新消息
-							messages.push({ role: 'user', content: message.content });
-
-							console.log('Messages to send to ollama: ', messages);
-
-							// 生成新的会话ID
-							currentConversationId = Date.now().toString();
-							lastMessageDiv = false;  // 重置状态
-
-							const response = await fetch(`${currentConfig.baseUrl}/api/chat`, {
-								method: 'POST',
-								headers: {
-									'Content-Type': 'application/json',
-								},
-								body: JSON.stringify({
-									model: currentConfig.model,
-									messages: messages,
-									stream: true
-								})
-							});
-
-							if (!response.ok) {
-								throw new Error(`Failed to send message: ${response.statusText}`);
-							}
-
-							// 修复 reader 的类型检查
-							const reader = response.body?.getReader();
-							if (!reader) {
-								throw new Error('Failed to get response reader');
-							}
-							currentReader = reader;
-							const decoder = new TextDecoder();
-							let content = '';
-
-							// 修改流式消息处理部分
-							try {
-								while (true) {
-									const { value, done } = await currentReader.read();
-									if (done) break;
-
-									const chunk = decoder.decode(value);
-									const lines = chunk.split('\n').filter(line => line.trim());
-									
-									if (!panel) {
-										return;
-									}
-
-									for (const line of lines) {
-										const data = JSON.parse(line) as OllamaChatResponse;
-										content += data.message.content;
-										
-										panel.webview.postMessage({
-											command: 'streamMessage',
-											content: data.message.content,
-											done: false,
-											newMessage: !lastMessageDiv,
-											conversationId: currentConversationId
-										});
-										lastMessageDiv = true;
-
-										if (data.done) {
-											// 更新消息历史
-											messages.push({ role: 'assistant', content });
-											messageHistory = manageMessageHistory(messages, currentConfig.maxTokens);
-											
-											panel.webview.postMessage({
-												command: 'streamMessage',
-												content: '',
-												done: true,
-												newMessage: false,
-												conversationId: currentConversationId
-											});
-											lastMessageDiv = false;
-											content = '';
-											currentConversationId = null;
-										}
-									}
-								}
-							} catch (error: unknown) {
-								if (error instanceof Error && error.name === 'AbortError') {
-									if (panel) {
-										panel.webview.postMessage({
-											command: 'streamMessage',
-											content: '\n[已终止生成]',
-											done: true,
-											newMessage: false,
-											conversationId: currentConversationId
-										});
-										currentConversationId = null;
-										lastMessageDiv = false;
-									}
-								} else {
-									throw error;
-								}
-							}
-
-							// 更新模型名称
-							if (panel) {
-								panel.webview.postMessage({
-									command: 'updateModelName',
-									modelName: currentConfig.model
-								});
-							}
-						} catch (error) {
-							const errorMessage = error instanceof Error ? error.message : String(error);
-							vscode.window.showErrorMessage(`Chat error: ${errorMessage}`);
-							if (panel) {
-								panel.webview.postMessage({
-									command: 'streamMessage',
-									content: `\n[错误: ${errorMessage}]`,
-									done: true
-								});
-							}
-						}
-					} else if (message.command === 'stopGeneration') {
-						if (currentReader) {
-							currentReader.cancel();
-							currentReader = null;
-							lastMessageDiv = false;  // 重置 lastMessageDiv 状态
-						}
-					} else if (message.command === 'toggleTheme') {
-						try {
-							// 获取当前主题配置
-							const workbenchConfig = vscode.workspace.getConfiguration('workbench');
-							const currentTheme = workbenchConfig.get<string>('colorTheme');
-							
-							// 使用 VS Code 的主题 kind 来判断当前主题
-							const currentKind = vscode.window.activeColorTheme.kind;
-							const isDark = currentKind === vscode.ColorThemeKind.Dark;
-							
-							// 根据当前主题状态切换
-							const newTheme = isDark ? 'Light+ (default light)' : 'Dark+ (default dark)';
-							
-							// 更新主题配置
-							await workbenchConfig.update(
-								'colorTheme',
-								newTheme,
-								vscode.ConfigurationTarget.Global
-							);
-
-							// 发送主题变化消息
-							if (panel) {
-								panel.webview.postMessage({
-									command: 'themeChanged',
-									isDark: !isDark // 切换后的状态
-								});
-							}
-						} catch (error) {
-							console.error('Failed to toggle theme:', error);
-							vscode.window.showErrorMessage('主题切换失败');
-						}
-					}
+					required: ['query']
 				},
-				undefined,
-				context.subscriptions
-			);
+				requiresConfirmation: false,
+				execute: async (args: Record<string, unknown>) => {
+					const query = String(args.query ?? '').trim();
+					if (!query) {
+						return 'Error: "query" is required.';
+					}
+					try {
+						const cfg = getWebSearchConfig();
+						const result = await searchWeb(query, {
+							provider: cfg.provider,
+							cacheTimeoutMinutes: cfg.cacheTimeout,
+							requestsPerMinute: cfg.requestsPerMinute
+						});
+						return result.context;
+					} catch (e) {
+						return `Web search failed: ${e instanceof Error ? e.message : String(e)}`;
+					}
+				}
+			});
+		}
 
-			// 当面板关闭时清除引用
-			panel.onDidDispose(() => {
-				messageHistory = [];
-				panel = undefined;
-			}, null, context.subscriptions);
+		let isFirstChunk = true;
+
+		const callbacks: AgentCallbacks = {
+			onStatus: event => {
+				webviewPanel.webview.postMessage({ command: 'agentStatus', event });
+			},
+			onStream: chunk => {
+				webviewPanel.webview.postMessage({
+					command: 'streamMessage',
+					content: chunk,
+					done: false,
+					newMessage: isFirstChunk,
+					conversationId
+				});
+				isFirstChunk = false;
+			},
+			onRequestConfirmation: (request: ConfirmRequest) => new Promise<boolean>(resolve => {
+				pendingConfirmResolver = resolve;
+				webviewPanel.webview.postMessage({ command: 'confirmAction', request });
+			}),
+			onCompleted: () => {
+				webviewPanel.webview.postMessage({
+					command: 'streamMessage',
+					content: '',
+					done: true,
+					newMessage: false,
+					conversationId
+				});
+			}
+		};
+
+		const agentConfig: AgentConfig = {
+			baseUrl: config.baseUrl,
+			model: config.model,
+			maxTokens: config.maxTokens,
+			keepAlive: config.keepAlive
+		};
+
+		// 检测 "vibe"/"go on" 等继续信号:开启自主执行模式,让 agent 一路推进到任务完成。
+		const autoContinue = isContinuePrompt(userMessage);
+
+		const result = await runAgentLoop({
+			config: agentConfig,
+			userMessage: userMessage,
+			workspaceRoot,
+			tools,
+			callbacks,
+			initialMessages: agentMessageHistory,
+			skills,
+			planFirst: shouldPlanFirst,
+			extraSystemMessages,
+			autoContinue
 		});
 
-		// Add all commands to the context subscriptions
-		context.subscriptions.push(settingsCommand);
-		context.subscriptions.push(refreshModelsCommand);
-		context.subscriptions.push(chatCommand);
+		// 把本轮最终 messages 回写,供下一轮保持上下文连续
+		agentMessageHistory = result.messages;
+	}
 
-		// 添加主题变化监听
+	async function getAvailableModels(baseUrl: string): Promise<string[]> {
+		try {
+			const response = await fetch(`${baseUrl}/api/tags`);
+			if (!response.ok) {
+				throw new Error(`Failed to fetch models: ${response.statusText}`);
+			}
+			const data = await response.json() as OllamaModelsResponse;
+			return data.models.map(m => m.model);
+		} catch (error) {
+			const errorMessage = error instanceof Error ? error.message : String(error);
+			vscode.window.showErrorMessage(`Failed to fetch models: ${errorMessage}`);
+			return [];
+		}
+	}
+
+	// Register settings command
+	const settingsCommand = vscode.commands.registerCommand('vscode-ollama.settings', () => {
+		if (settingsPanel) {
+			settingsPanel.reveal(vscode.ViewColumn.One);
+			return;
+		}
+
+		settingsPanel = vscode.window.createWebviewPanel(
+			'ollamaSettings',
+			'Ollama Settings',
+			vscode.ViewColumn.One,
+			{
+				enableScripts: true,
+				retainContextWhenHidden: true
+			}
+		);
+		context.subscriptions.push(settingsPanel);
+
+		const updateWebview = () => {
+			if (settingsPanel) {
+				settingsPanel.webview.html = getSettingsWebviewContent(getOllamaConfig(), settingsPanel.webview);
+			}
+		};
+
+		updateWebview();
+
+		settingsPanel.onDidDispose(
+			() => {
+				settingsPanel = undefined;
+			},
+			null,
+			context.subscriptions
+		);
+
+		// 监听配置变化
 		context.subscriptions.push(
-			vscode.window.onDidChangeActiveColorTheme(theme => {
-				if (panel) {
-					panel.webview.postMessage({
-						command: 'themeChanged',
-						isDark: theme.kind === vscode.ColorThemeKind.Dark
-					});
+			vscode.workspace.onDidChangeConfiguration(e => {
+				if (e.affectsConfiguration('vscode-ollama')) {
+					updateWebview();
 				}
 			})
 		);
-	} catch (error) {
-		console.error('Activation failed:', error);
-	}
+
+		// 处理 webview 消息
+		settingsPanel.webview.onDidReceiveMessage(
+			async message => {
+				switch (message.command) {
+					case 'openSettings':
+						vscode.commands.executeCommand('workbench.action.openSettings', 'vscode-ollama');
+						return;
+					case 'refreshModels':
+						try {
+							if (settingsPanel) {
+								const models = await getAvailableModels(message.baseUrl);
+								settingsPanel.webview.postMessage({
+									command: 'updateModels',
+									models
+								});
+							}
+						} catch (error) {
+							vscode.window.showErrorMessage(`Failed to refresh models: ${error}`);
+						}
+						return;
+					case 'saveSettings':
+						try {
+							const config = vscode.workspace.getConfiguration('vscode-ollama');
+							await config.update('baseUrl', message.settings.baseUrl, true);
+							await config.update('model', message.settings.model, true);
+							await config.update('maxTokens', message.settings.maxTokens, true);
+							await config.update('keepAlive', message.settings.keepAlive, true);
+							await config.update('performanceMode', message.settings.performanceMode, true);
+							await config.update('systemPrompt', message.settings.systemPrompt, true);
+
+							vscode.window.showInformationMessage('Settings saved successfully');
+							settingsPanel?.webview.postMessage({ command: 'saveSuccess' });
+						} catch (error) {
+							vscode.window.showErrorMessage(`Failed to save settings: ${error}`);
+						}
+						return;
+					case 'testConnection':
+						try {
+							const response = await fetch(`${message.baseUrl}/api/version`);
+							settingsPanel?.webview.postMessage({
+								command: 'testConnectionResult',
+								success: response.ok
+							});
+						} catch {
+							settingsPanel?.webview.postMessage({
+								command: 'testConnectionResult',
+								success: false
+							});
+						}
+						return;
+					case 'webviewError':
+						vscode.window.showErrorMessage(`Settings webview 脚本错误: ${message.message}`);
+						return;
+						return;
+				}
+			},
+			undefined,
+			context.subscriptions
+		);
+	});
+
+	// Register refresh models command
+	const refreshModelsCommand = vscode.commands.registerCommand('vscode-ollama.refreshModels', async () => {
+		const config = getOllamaConfig();
+		try {
+			const models = await getAvailableModels(config.baseUrl);
+			vscode.window.showInformationMessage(`Found ${models.length} models`);
+		} catch (error) {
+			vscode.window.showErrorMessage(`Failed to refresh models: ${error}`);
+		}
+	});
+
+	// Register chat command
+	const chatCommand = vscode.commands.registerCommand('vscode-ollama.openChat', () => {
+		if (panel) {
+			panel.reveal(vscode.ViewColumn.One);
+			return;
+		}
+
+		panel = vscode.window.createWebviewPanel(
+			'ollamaChat',
+			'Ollama Chat',
+			vscode.ViewColumn.One,
+			{
+				enableScripts: true,
+				retainContextWhenHidden: true,
+				enableFindWidget: true,
+				enableCommandUris: true
+			}
+		);
+		context.subscriptions.push(panel);
+
+		const config = getOllamaConfig();
+		panel.webview.html = getChatWebviewContent(config, panel.webview, context.extensionUri);
+
+		// 在 webview 准备好后立即发送模型名称
+		panel.webview.onDidReceiveMessage(
+			async message => {
+				if (!panel) {
+					return;
+				}
+
+				if (message.command === 'webviewReady') {
+					panel.webview.postMessage({ command: 'welcomeMessage' });
+					panel.webview.postMessage({
+						command: 'updateModelName',
+						modelName: config.model
+					});
+				} else if (message.command === 'resetContext') {
+					// 重新初始化消息历史
+					messageHistory = [];
+				} else if (message.command === 'sendMessage') {
+					try {
+						const currentConfig = getOllamaConfig();
+
+						// 处理 /reset 命令：直接清空本地上下文，无需调用 Ollama API
+						if (message.content.trim() === '/reset') {
+							messageHistory = [];
+							agentMessageHistory = [];
+							panel.webview.postMessage({ command: 'resetChat' });
+							return;
+						}
+
+						// Agent 模式(常驻):让模型通过工具调用搜索/理解/修改代码库并执行 git 命令。
+						// web search 已作为工具由 LLM 自主决策,不再在每次请求时自动搜索。
+						if (message.agentMode) {
+							const conversationId = Date.now().toString();
+							activeConversationId = conversationId;
+							try {
+								// plan-first 仅由显式 /plan 前缀触发(在 runAgentChat 内部判断),
+								// 是否进入 plan-first 不再用正则猜测意图,交给 LLM 自主决策。
+								await runAgentChat(panel, currentConfig, message.content, conversationId, false);
+							} catch (error) {
+								const errorMessage = error instanceof Error ? error.message : String(error);
+								vscode.window.showErrorMessage(`Agent error: ${errorMessage}`);
+								panel.webview.postMessage({
+									command: 'streamMessage',
+									content: `\n[Agent 错误: ${errorMessage}]`,
+									done: true,
+									newMessage: false,
+									conversationId
+								});
+							} finally {
+								activeConversationId = null;
+							}
+							return;
+						}
+
+						// 普通聊天模式:web search 仍通过按钮开关手动触发
+						const extraSystemMessages = await collectWebSearchContext(panel, message);
+
+						// 初始化消息数组，确保至少包含系统提示词
+						const messages: ChatMessage[] = [];
+						const existingSystem = messageHistory.find(msg => msg.role === 'system');
+						if (existingSystem) {
+							messages.push(existingSystem);
+						} else {
+							messages.push({ role: 'system', content: currentConfig.systemPrompt });
+						}
+
+						// 把搜索上下文追加到消息数组
+						if (extraSystemMessages && extraSystemMessages.length > 0) {
+							for (const m of extraSystemMessages) {
+								if (m && m.role && m.content) {
+									messages.push({ role: m.role, content: m.content });
+								}
+							}
+						}
+
+						// 添加用户新消息
+						messages.push({ role: 'user', content: message.content });
+
+						// 生成新的会话ID
+						const conversationId = Date.now().toString();
+						activeConversationId = conversationId;
+
+						await streamChatResponse(panel, currentConfig, conversationId, messages, fullContent => {
+							// 更新消息历史
+							messages.push({ role: 'assistant', content: fullContent });
+							messageHistory = manageMessageHistory(messages, currentConfig.maxTokens);
+						});
+
+						activeConversationId = null;
+
+						// 更新模型名称
+						panel.webview.postMessage({
+							command: 'updateModelName',
+							modelName: currentConfig.model
+						});
+					} catch (error) {
+						const errorMessage = error instanceof Error ? error.message : String(error);
+						vscode.window.showErrorMessage(`Chat error: ${errorMessage}`);
+						const failedConversationId = activeConversationId;
+						activeConversationId = null;
+						if (panel) {
+							panel.webview.postMessage({
+								command: 'streamMessage',
+								content: `\n[错误: ${errorMessage}]`,
+								done: true,
+								newMessage: false,
+								conversationId: failedConversationId
+							});
+						}
+					}
+				} else if (message.command === 'stopGeneration') {
+					if (currentReader) {
+						currentReader.cancel().catch(() => { /* ignore */ });
+						currentReader = null;
+					}
+					// 立即通知 webview 结束，避免依赖流的取消行为
+					panel.webview.postMessage({
+						command: 'streamMessage',
+						content: '\n[已终止生成]',
+						done: true,
+						newMessage: false,
+						conversationId: activeConversationId
+					});
+					activeConversationId = null;
+				} else if (message.command === 'confirmActionResult') {
+					// 用户对 agent 工具调用确认/拒绝
+					if (pendingConfirmResolver) {
+						pendingConfirmResolver(Boolean(message.approved));
+						pendingConfirmResolver = null;
+					}
+				} else if (message.command === 'webviewError') {
+					// webview 脚本运行错误(可见化,便于排查)
+					vscode.window.showErrorMessage(`Chat webview 脚本错误: ${message.message}`);
+				} else if (message.command === 'toggleTheme') {
+					try {
+						// 获取当前主题配置
+						const workbenchConfig = vscode.workspace.getConfiguration('workbench');
+						const currentKind = vscode.window.activeColorTheme.kind;
+						const isDark = currentKind === vscode.ColorThemeKind.Dark;
+
+						// 根据当前主题状态切换
+						const newTheme = isDark ? 'Light+ (default light)' : 'Dark+ (default dark)';
+
+						// 更新主题配置
+						await workbenchConfig.update(
+							'colorTheme',
+							newTheme,
+							vscode.ConfigurationTarget.Global
+						);
+
+						// 发送主题变化消息
+						panel.webview.postMessage({
+							command: 'themeChanged',
+							isDark: !isDark // 切换后的状态
+						});
+					} catch (error) {
+						console.error('Failed to toggle theme:', error);
+						vscode.window.showErrorMessage('主题切换失败');
+					}
+				}
+			},
+			undefined,
+			context.subscriptions
+		);
+
+		// 当面板关闭时清除引用
+		panel.onDidDispose(() => {
+			messageHistory = [];
+			agentMessageHistory = [];
+			currentReader = null;
+			activeConversationId = null;
+			panel = undefined;
+		}, null, context.subscriptions);
+	});
+
+	// Add all commands to the context subscriptions
+	context.subscriptions.push(settingsCommand);
+	context.subscriptions.push(refreshModelsCommand);
+	context.subscriptions.push(chatCommand);
+
+	// 添加主题变化监听
+	context.subscriptions.push(
+		vscode.window.onDidChangeActiveColorTheme(theme => {
+			if (panel) {
+				panel.webview.postMessage({
+					command: 'themeChanged',
+					isDark: theme.kind === vscode.ColorThemeKind.Dark
+				});
+			}
+		})
+	);
 }
 
 // This method is called when your extension is deactivated
 export function deactivate() {
-	if (settingsPanel) {
-		settingsPanel.dispose();
-	}
+	// Webview panels are disposed automatically via context.subscriptions
 }

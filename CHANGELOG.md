@@ -5,6 +5,35 @@ All notable changes to the "vscode-ollama" extension will be documented in this 
 Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
 
 
+## [1.3.0] - 2026-08-19
+
+### Added
+- Coding agent mode: the model can use tools (`read` / `write` / `edit` / `grep` / `find` / `ls` / `bash`) instead of only direct chat
+  - Read/search/list tools run automatically; file edits and command execution are sandboxed to the workspace
+  - Multi-turn context persistence so the agent keeps the full session history
+  - "vibe" / "go on" continue signal: the agent autonomously keeps working until the task is done, no repeated prompts needed
+- Agent status bar showing the model's tool activity (thinking / tool call / result)
+- Skill system: the agent auto-loads matching skills from `skills/*.md` (workspace first, then extension-bundled)
+- Plan mode: prefix a request with `/plan` (or open-ended codebase questions) to propose a plan first, then execute automatically
+- Web search as a tool (`web_search`), decided by the LLM per-question; codebase questions prefer `grep` / `find` / `ls` / `read`
+- `scripts/verify-webview.js` checks webview script syntax and CSP safety; runs as part of `npm run compile`
+
+### Changed
+- Switched from Ollama's raw `/api/chat` to the OpenAI-compatible `/v1/chat/completions` endpoint (standard `tool_calls` pairing, SSE streaming, `max_tokens`)
+- Unified build to esbuild (outputs `dist/extension.js`); `marked.min.js` is bundled locally for the webview
+- Added Content Security Policy with nonce-based scripts to both webviews
+- Rewrote the agent system prompt (Cline-style) with hard rules: codebase questions MUST use tools, real-time questions MUST use `web_search`, never ask the user to run commands
+- Intent judgment now fully handled by the LLM; removed all regex-based intent detection
+- `grep` tool falls back to POSIX `grep` when ripgrep is not installed
+
+### Fixed
+- Message history ordering bug (system prompt was appended to the end of the context)
+- Streaming response parsing when a JSON line is split across chunks
+- Webview script syntax errors and CSP-blocked handlers that broke chat sending and the model dropdown
+- XSS risk: LLM/user content is now HTML-escaped before rendering
+- Tool calls placed inside `message.content` (e.g. qwen2.5-coder) are now parsed via `<tool_call>` tags or bare JSON
+- Removed stale `src/extension.js` that conflicted with `extension.ts`
+
 ## [1.2.1] - 2025-08-21
 
 ### Changed

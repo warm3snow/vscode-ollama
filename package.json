@@ -2,7 +2,7 @@
   "name": "vscode-ollama",
   "displayName": "VSCode Ollama",
   "description": "VSCode Ollama is a powerful Visual Studio Code extension that seamlessly integrates Ollama's local LLM capabilities into your development environment.",
-  "version": "1.2.1",
+  "version": "1.3.0",
   "publisher": "warm3snow",
   "author": {
     "name": "warm3snow"
@@ -26,7 +26,7 @@
   "activationEvents": [
     "onStartupFinished"
   ],
-  "main": "./out/extension.js",
+  "main": "./dist/extension.js",
   "contributes": {
     "commands": [
       {
@@ -75,6 +75,29 @@
           "type": "string",
           "default": "Given the following conversation, relevant context, and a follow up question, reply with an answer to the current question the user is asking. Return only your response to the question given the above information following the users instructions as needed.",
           "description": "The system prompt to use for chat conversations"
+        },
+        "vscode-ollama.webSearch.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable web search for chat conversations"
+        },
+        "vscode-ollama.webSearch.cacheTimeout": {
+          "type": "number",
+          "default": 60,
+          "description": "Cache timeout in minutes for web search results"
+        },
+        "vscode-ollama.webSearch.requestsPerMinute": {
+          "type": "number",
+          "default": 10,
+          "description": "Maximum web search requests per minute"
+        },
+        "vscode-ollama.searchProvider": {
+          "type": "string",
+          "default": "bing",
+          "enum": [
+            "bing"
+          ],
+          "description": "Web search provider"
         }
       }
     }
@@ -89,11 +112,12 @@
   "homepage": "https://github.com/warm3snow/vscode-ollama#readme",
   "scripts": {
     "vscode:prepublish": "npm run compile",
-    "compile": "tsc -p ./",
-    "watch": "tsc -watch -p ./",
+    "compile": "node esbuild.js --production && node scripts/verify-webview.js",
+    "verify:webview": "node scripts/verify-webview.js",
+    "watch": "node esbuild.js --watch",
     "pretest": "npm run compile && npm run lint",
-    "lint": "eslint src --ext ts",
-    "test": "node ./out/test/runTest.js"
+    "lint": "eslint \"src/**/*.ts\"",
+    "typecheck": "tsc -p ./ --noEmit"
   },
   "devDependencies": {
     "@types/node": "^16.x.x",
@@ -102,13 +126,12 @@
     "@typescript-eslint/eslint-plugin": "^5.x.x",
     "@typescript-eslint/parser": "^5.x.x",
     "@vscode/vsce": "^2.24.0",
+    "esbuild": "^0.21.0",
     "eslint": "^8.x.x",
-    "typescript": "^4.x.x"
-  },
-  "dependencies": {
+    "marked": "^9.0.0",
     "node-fetch": "^2.6.1",
+    "typescript": "^4.x.x",
     "whatwg-url": "^11.0.0",
-    "web-streams-polyfill": "^3.2.1",
-    "marked": "^9.0.0"
+    "web-streams-polyfill": "^3.2.1"
   }
 }

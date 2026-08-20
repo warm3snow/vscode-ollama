@@ -1,9 +1,47 @@
 import * as vscode from 'vscode';
 
-export function getSettingsWebviewContent(config: any): string {
-    const html = `<!DOCTYPE html>
+interface SettingsConfig {
+	baseUrl: string;
+	model: string;
+	maxTokens: number;
+	keepAlive: string;
+	performanceMode: string;
+	systemPrompt: string;
+}
+
+function getNonce(): string {
+	let text = '';
+	const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+	for (let i = 0; i < 32; i++) {
+		text += possible.charAt(Math.floor(Math.random() * possible.length));
+	}
+	return text;
+}
+
+export function getSettingsWebviewContent(config: SettingsConfig, webview: vscode.Webview): string {
+	const nonce = getNonce();
+
+	// 供 JS 内嵌使用的状态对象：JSON 序列化 + 转义 < 防止 </script> 提前闭合
+	const stateObj = {
+		baseUrl: config.baseUrl,
+		model: config.model,
+		maxTokens: config.maxTokens,
+		keepAlive: config.keepAlive,
+		performanceMode: config.performanceMode,
+		systemPrompt: config.systemPrompt
+	};
+	const serializedState = JSON.stringify(stateObj).replace(/</g, '\\u003c');
+
+	const keepAliveOptions = ['1 minute', '5 minutes', '10 minutes', '30 minutes'];
+	const performanceModes = ['Base (Default)', 'Performance', 'Low Latency'];
+
+	const escapeAttr = (value: string) =>
+		value.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+
+	const html = `<!DOCTYPE html>
     <html>
     <head>
+        <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">
         <style>
             body {
                 padding: 20px;
@@ -92,68 +130,73 @@ export function getSettingsWebviewContent(config: any): string {
     </head>
     <body>
         <h1>Ollama Settings</h1>
-        
+
         <div class="setting-item">
             <label class="setting-label">Base URL</label>
-            <input type="text" id="baseUrlInput" value="${config.baseUrl}" placeholder="Enter Ollama server base URL">
+            <input type="text" id="baseUrlInput" value="${escapeAttr(config.baseUrl)}" placeholder="Enter Ollama server base URL">
             <button id="testConnectionBtn" class="test-connection-button">Test Connection</button>
             <div id="connectionStatus" class="connection-status"></div>
         </div>
-        
+
         <div class="setting-item">
             <label class="setting-label">Model</label>
-            <select id="model" onclick="refreshModels()">
-                <option value="${config.model}">${config.model}</option>
-            </select>
+            <div style="display: flex; gap: 8px;">
+                <select id="model" style="flex: 1;">
+                    <option value="${escapeAttr(config.model)}">${escapeAttr(config.model)}</option>
+                </select>
+                <button id="refreshModelsBtn" class="test-connection-button">刷新</button>
+            </div>
         </div>
-        
+
         <div class="setting-item">
             <label class="setting-label">Max Tokens</label>
             <input type="number" id="maxTokens" value="${config.maxTokens}" />
         </div>
-        
+
         <div class="setting-item">
             <label class="setting-label">Keep Alive</label>
             <select id="keepAlive">
-                ${['1 minute', '5 minutes', '10 minutes', '30 minutes']
-                    .map(value => 
-                        `<option value="${value}" ${value === config.keepAlive ? 'selected' : ''}>${value}</option>`
+                ${keepAliveOptions
+                    .map(value =>
+                        `<option value="${escapeAttr(value)}" ${value === config.keepAlive ? 'selected' : ''}>${escapeAttr(value)}</option>`
                     ).join('')}
             </select>
         </div>
-        
+
         <div class="setting-item">
             <label class="setting-label">Performance Mode</label>
             <select id="performanceMode">
-                ${['Base (Default)', 'Fast', 'Ultra']
-                    .map(value => 
-                        `<option value="${value}" ${value === config.performanceMode ? 'selected' : ''}>${value}</option>`
+                ${performanceModes
+                    .map(value =>
+                        `<option value="${escapeAttr(value)}" ${value === config.performanceMode ? 'selected' : ''}>${escapeAttr(value)}</option>`
                     ).join('')}
             </select>
         </div>
 
         <div class="setting-item">
             <label class="setting-label">System Prompt</label>
-            <textarea id="systemPrompt" rows="4" style="width: 100%; padding: 8px; border: 1px solid var(--vscode-input-border); background: var(--vscode-input-background); color: var(--vscode-input-foreground); border-radius: 4px; resize: vertical;">${config.systemPrompt.replace(/"/g, '&quot;').replace(/\n/g, '&#10;')}</textarea>
+            <textarea id="systemPrompt" rows="4" style="width: 100%; padding: 8px; border: 1px solid var(--vscode-input-border); background: var(--vscode-input-background); color: var(--vscode-input-foreground); border-radius: 4px; resize: vertical;">${escapeAttr(config.systemPrompt)}</textarea>
         </div>
 
-        <button onclick="saveSettings()">Save Settings</button>
+        <button id="saveBtn">Save Settings</button>
 
-        <script>
+        <script nonce="${nonce}">
             const vscode = acquireVsCodeApi();
-            
+
+            // 全局错误捕获:转发到扩展端,便于排查 webview 脚本问题
+            window.addEventListener('error', (e) => {
+                vscode.postMessage({
+                    command: 'webviewError',
+                    message: e.message,
+                    stack: e.error ? e.error.stack : ''
+                });
+            });
+
             // 保存当前设置到 webview 状态
-            const currentState = {
-                baseUrl: "${config.baseUrl}",
-                model: "${config.model}",
-                maxTokens: ${config.maxTokens},
-                keepAlive: "${config.keepAlive}",
-                performanceMode: "${config.performanceMode}",
-                systemPrompt: "${config.systemPrompt.replace(/"/g, '&quot;').replace(/\n/g, '&#10;')}"
-            };
+            const currentState = ${serializedState};
             vscode.setState(currentState);
 
-            // 页面加载时恢复状态
+            // 页面加载时恢复状态并自动刷新模型列表
             window.addEventListener('load', () => {
                 const state = vscode.getState();
                 if (state) {
@@ -164,7 +207,12 @@ export function getSettingsWebviewContent(config: any): string {
                     document.getElementById('performanceMode').value = state.performanceMode;
                     document.getElementById('systemPrompt').value = state.systemPrompt;
                 }
+                refreshModels();
             });
+
+            // CSP 兼容的事件绑定(禁用内联 onclick)
+            document.getElementById('saveBtn').addEventListener('click', saveSettings);
+            document.getElementById('refreshModelsBtn').addEventListener('click', refreshModels);
 
             function saveSettings() {
                 const settings = {
@@ -175,28 +223,25 @@ export function getSettingsWebviewContent(config: any): string {
                     keepAlive: document.getElementById('keepAlive').value,
                     performanceMode: document.getElementById('performanceMode').value
                 };
-                
+
                 vscode.postMessage({
                     command: 'saveSettings',
                     settings
                 });
 
-                // 更新 webview 状态
                 vscode.setState(settings);
 
-                // 创建并显示保存成功提示
                 const notification = document.createElement('div');
                 notification.className = 'save-notification';
                 notification.textContent = '设置已保存';
                 document.body.appendChild(notification);
 
-                // 2秒后自动移除提示
                 setTimeout(() => {
                     notification.remove();
                 }, 2000);
             }
 
-            async function refreshModels() {
+            function refreshModels() {
                 vscode.postMessage({
                     command: 'refreshModels',
                     baseUrl: document.getElementById('baseUrlInput').value
@@ -208,10 +253,24 @@ export function getSettingsWebviewContent(config: any): string {
                 if (message.command === 'updateModels') {
                     const modelSelect = document.getElementById('model');
                     const currentModel = modelSelect.value;
+
+                    // 模型为空(Ollama 不可达/未安装):保留当前选项并提示
+                    if (!message.models || message.models.length === 0) {
+                        const statusDiv = document.getElementById('connectionStatus');
+                        statusDiv.className = 'connection-status error';
+                        statusDiv.textContent = '无法获取模型列表,请检查 Base URL 或确认 Ollama 服务已启动';
+                        return;
+                    }
+
                     modelSelect.innerHTML = message.models
-                        .map(model => 
-                            \`<option value="\${model}" \${model === currentModel ? 'selected' : ''}>\${model}</option>\`
+                        .map(model =>
+                            '<option value="' + model + '" ' + (model === currentModel ? 'selected' : '') + '>' + model + '</option>'
                         ).join('');
+
+                    // 当前选中的模型不在列表中时,回退到第一个
+                    if (message.models.indexOf(currentModel) === -1) {
+                        modelSelect.value = message.models[0];
+                    }
                 }
             });
 
@@ -220,7 +279,7 @@ export function getSettingsWebviewContent(config: any): string {
                 const baseUrl = document.getElementById('baseUrlInput').value.trim();
                 const testButton = document.getElementById('testConnectionBtn');
                 const statusDiv = document.getElementById('connectionStatus');
-                
+
                 if (!baseUrl) {
                     vscode.postMessage({
                         command: 'showError',
@@ -246,10 +305,10 @@ export function getSettingsWebviewContent(config: any): string {
                 if (message.command === 'testConnectionResult') {
                     const testButton = document.getElementById('testConnectionBtn');
                     const statusDiv = document.getElementById('connectionStatus');
-                    
+
                     testButton.disabled = false;
                     testButton.textContent = 'Test Connection';
-                    
+
                     if (message.success) {
                         statusDiv.className = 'connection-status success';
                         statusDiv.textContent = 'Test Connection is Success';
@@ -262,6 +321,6 @@ export function getSettingsWebviewContent(config: any): string {
         </script>
     </body>
     </html>`;
-    
-    return html;
-} 
+
+	return html;
+}

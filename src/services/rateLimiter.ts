@@ -1,7 +1,7 @@
 export class RateLimiter {
     private timestamps: number[] = [];
     private readonly windowMs: number;
-    private readonly maxRequests: number;
+    readonly maxRequests: number;
 
     constructor(windowMs: number = 60000, maxRequests: number = 10) {
         this.windowMs = windowMs;

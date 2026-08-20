@@ -6,7 +6,6 @@ vsc-extension-quickstart.md
 **/eslint.config.mjs
 **/*.map
 **/*.ts
+src/**
+scripts/**
 node_modules/**
-!node_modules/node-fetch/**
-!node_modules/whatwg-url/**
-!node_modules/web-streams-polyfill/**

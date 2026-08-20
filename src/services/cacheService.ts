@@ -5,9 +5,16 @@ interface CacheItem<T> {
 
 export class CacheService<T> {
     private cache: Map<string, CacheItem<T>> = new Map();
-    private readonly ttl: number; // Time to live in milliseconds
+    private ttl: number; // Time to live in milliseconds
+    ttlMinutes: number;
 
     constructor(ttlMinutes: number = 60) {
+        this.ttlMinutes = ttlMinutes;
+        this.ttl = ttlMinutes * 60 * 1000;
+    }
+
+    setTtlMinutes(ttlMinutes: number): void {
+        this.ttlMinutes = ttlMinutes;
         this.ttl = ttlMinutes * 60 * 1000;
     }
 
@@ -20,7 +27,9 @@ export class CacheService<T> {
 
     get(key: string): T | null {
         const item = this.cache.get(key);
-        if (!item) return null;
+        if (!item) {
+            return null;
+        }
 
         if (Date.now() - item.timestamp > this.ttl) {
             this.cache.delete(key);

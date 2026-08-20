@@ -1,258 +1,31 @@
 import * as vscode from 'vscode';
-import * as fs from 'fs';
-import * as path from 'path';
-import { marked } from 'marked';
 
-// 在文件顶部添加类型声明
-declare global {
-    interface Window {
-        toggleThink: (header: HTMLElement) => void;
-    }
+interface ChatConfig {
+	baseUrl: string;
+	model: string;
+	maxTokens: number;
+	keepAlive: string;
+	performanceMode: string;
+	systemPrompt: string;
 }
 
-export function getChatWebviewContent(config: any): string {
-    // Remove the file reading code
-    // const markedPath = path.join(__dirname, '..', 'lib', 'marked.min.js');
-    // const marked = fs.readFileSync(markedPath, 'utf-8');
+function getNonce(): string {
+	let text = '';
+	const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+	for (let i = 0; i < 32; i++) {
+		text += possible.charAt(Math.floor(Math.random() * possible.length));
+	}
+	return text;
+}
 
-    // Define the processMessage function as a string
-    const processMessageFn = `
-        function processMessage(content) {
-            // 1. 处理转义字符
-            content = content.replace(/\\\\u003c/g, '<')
-                           .replace(/\\\\u003e/g, '>');
-            
-            // 2. 将 <br> 转换为实际的换行符，这样 marked 可以正确处理
-            content = content.replace(/<br>/g, '\\n');
-            
-            // 新增: 检测看起来像是思考文本的内容并包装为think标签
-            // 思考文本的特征：包含特定的引导词、提到用户输入、分析过程等
-            const thinkingPatterns = [
-                /(?:Alright|Okay|First|I should|I need|Let's|Let me|Looking at|Based on),?\\s+so\\s+(?:I|we)\\s+(?:need|should|have to|want to|could|might|can|will)\\s+(?:to\\s+)?(?:figure|respond|check|understand|think|analyze|consider|reply|handle)/i,
-                /The user (?:is asking|asked|mentioned|said|wants|said|provided)/i,
-                /(?:Putting|Breaking|Let's start|Let me analyze|I'll analyze|To summarize|In summary)/i
-            ];
-            
-            // 检查内容是否已经包含think标签，如果不包含则检查是否符合思考模式
-            if (!content.includes('<think>') && !content.includes('</think>')) {
-                // 检查是否有任何思考模式匹配
-                const hasThinkingPattern = thinkingPatterns.some(pattern => {
-                    return pattern.test(content);
-                });
-                
-                // 如果匹配思考模式，且不是单句回复，则包装为think标签
-                if (hasThinkingPattern && content.split('\\n').length > 2) {
-                    // 查找可能的最后一段思考后的实际回复（通常是简短的响应）
-                    const contentParts = content.split('\\n\\n');
-                    
-                    // 如果最后一段是简短的回复（少于100个字符），保留为实际回复
-                    if (contentParts.length > 1 && contentParts[contentParts.length - 1].length < 100) {
-                        const actualResponse = contentParts.pop();
-                        const thinkingContent = contentParts.join('\\n\\n');
-                        content = '<think>' + thinkingContent + '</think>\\n\\n' + actualResponse;
-                    } else {
-                        // 整个内容都是思考，最后一行可能是总结
-                        const lines = content.split('\\n');
-                        if (lines.length > 1 && lines[lines.length - 1].length < 100) {
-                            const actualResponse = lines.pop();
-                            const thinkingContent = lines.join('\\n');
-                            content = '<think>' + thinkingContent + '</think>\\n' + actualResponse;
-                        } else {
-                            // 整个内容都是思考
-                            content = '<think>' + content + '</think>';
-                        }
-                    }
-                }
-            }
-            
-            // 3. 处理思考标签
-            content = content.replace(/<think>([\\\\s\\\\S]*?)<\\/think>/g, (match, p1) => {
-                // 生成唯一ID
-                const thinkId = 'think-' + Math.random().toString(36).substr(2, 9);
-                
-                const html = [
-                    '<div class="think-section">',
-                    '    <div class="think-header" data-think-id="' + thinkId + '">',
-                    '        <span class="think-toggle">▼</span>',
-                    '        <span>思考过程</span>',
-                    '    </div>',
-                    '    <div class="think-content" id="' + thinkId + '">' + p1.replace(/\\n/g, '<br>') + '</div>',
-                    '</div>'
-                ].join('');
+export function getChatWebviewContent(config: ChatConfig, webview: vscode.Webview, extensionUri: vscode.Uri): string {
+	const nonce = getNonce();
+	const markedUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'dist', 'webview', 'marked.min.js'));
 
-                // 确保在下一个事件循环中初始化这个think section
-                setTimeout(() => initThinkSection(thinkId), 0);
-                
-                return html;
-            });
-            
-            return content;
-        }
-
-        // 初始化单个think section
-        function initThinkSection(thinkId) {
-            const header = document.querySelector('[data-think-id="' + thinkId + '"]');
-            const content = document.getElementById(thinkId);
-            
-            if (!header || !content) {
-                console.log('Could not find header or content for think section:', thinkId);
-                return;
-            }
-            
-            if (!header.hasAttribute('data-initialized')) {
-                header.setAttribute('data-initialized', 'true');
-                
-                // 默认展开 - 移除 collapsed 类
-                content.classList.remove('collapsed');
-                header.classList.remove('collapsed');
-                
-                // 确保toggle按钮显示为展开状态
-                const toggle = header.querySelector('.think-toggle');
-                if (toggle) {
-                    toggle.textContent = '▼';
-                }
-                
-                // 添加点击事件
-                header.addEventListener('click', function() {
-                    console.log('Think header clicked for:', thinkId);
-                    content.classList.toggle('collapsed');
-                    header.classList.toggle('collapsed');
-                    
-                    const toggle = header.querySelector('.think-toggle');
-                    if (toggle) {
-                        toggle.textContent = content.classList.contains('collapsed') ? '▶' : '▼';
-                    }
-                });
-                
-            }
-        }
-
-        // 初始化所有think sections
-        function initAllThinkSections() {
-            const headers = document.querySelectorAll('.think-header[data-think-id]');
-            headers.forEach(header => {
-                const thinkId = header.getAttribute('data-think-id');
-                if (thinkId) {
-                    initThinkSection(thinkId);
-                }
-            });
-        }
-    `;
-
-    // 添加会话ID追踪
-    let currentConversationId: string | null = null;
-
-    // 修改 appendMessage 函数
-    const appendMessageFn = `
-        function appendMessage(content, isUser) {
-            let currentGroup = chatContainer.lastElementChild;
-            
-            if (isUser || !currentGroup || !currentGroup.classList.contains('conversation-group')) {
-                currentGroup = document.createElement('div');
-                currentGroup.className = 'conversation-group';
-                chatContainer.appendChild(currentGroup);
-            }
-
-            const messageDiv = document.createElement('div');
-            messageDiv.className = 'message ' + (isUser ? 'user-message' : 'assistant-message');
-            
-            if (!isUser) {
-                messageDiv.setAttribute('data-conversation-id', currentConversationId || '');
-            }
-            
-            const prefixDiv = document.createElement('div');
-            prefixDiv.className = 'message-prefix';
-            prefixDiv.textContent = isUser ? '你' : currentModelName;
-            messageDiv.appendChild(prefixDiv);
-            
-            const contentDiv = document.createElement('div');
-            contentDiv.className = 'message-content markdown-content';
-            
-            if (isUser) {
-                // 对用户消息，直接将 <br> 转换为换行符
-                contentDiv.innerHTML = content.replace(/<br>/g, '\\n');
-            } else {
-                console.log('Raw assistant message:', content);
-                
-                // 保存原始内容
-                contentDiv.setAttribute('data-markdown-content', content);
-                
-                // 处理转义字符
-                let processedContent = content.replace(/\\\\u003c/g, '<')
-                                           .replace(/\\\\u003e/g, '>');
-                
-                // 检查是否包含think标签
-                if (processedContent.includes('<think>')) {
-                    
-                    // 分离思考内容和实际回复
-                    const thinkMatch = processedContent.match(/<think>([\\s\\S]*?)<\\/think>/);
-                    
-                    if (thinkMatch) {
-                        const thinkContent = thinkMatch[1];
-                        const remainingContent = processedContent.replace(/<think>[\\s\\S]*?<\\/think>/, '').trim();
-                        
-                        // 生成唯一ID
-                        const thinkId = 'think-' + Math.random().toString(36).substr(2, 9);
-                        
-                        // 先添加思考部分
-                        const thinkHtml = [
-                            '<div class="think-section">',
-                            '    <div class="think-header" data-think-id="' + thinkId + '">',
-                            '        <span class="think-toggle">▼</span>',
-                            '        <span>思考过程</span>',
-                            '    </div>',
-                            '    <div class="think-content" id="' + thinkId + '">' + thinkContent.replace(/\\n/g, '<br>') + '</div>',
-                            '</div>'
-                        ].join('');
-                        
-                        // 然后添加实际回复部分
-                        const markedOptions = {
-                            breaks: true,
-                            gfm: true,
-                            xhtml: true
-                        };
-                        
-                        contentDiv.innerHTML = thinkHtml;
-                        
-                        if (remainingContent) {
-                            const responseDiv = document.createElement('div');
-                            responseDiv.className = 'response-content';
-                            responseDiv.innerHTML = marked.parse(remainingContent, markedOptions);
-                            contentDiv.appendChild(responseDiv);
-                        }
-                        
-                        // 在下一个事件循环中初始化思考部分
-                        setTimeout(() => initThinkSection(thinkId), 0);
-                    } else {
-                        // 如果没有正确匹配think标签，则按常规处理
-                        contentDiv.innerHTML = marked.parse(processedContent, {
-                            breaks: true,
-                            gfm: true,
-                            xhtml: true
-                        });
-                    }
-                } else {
-                    // 没有think标签的常规处理
-                    contentDiv.innerHTML = marked.parse(processedContent, {
-                        breaks: true,
-                        gfm: true,
-                        xhtml: true
-                    });
-                }
-            }
-            
-            messageDiv.appendChild(contentDiv);
-            currentGroup.appendChild(messageDiv);
-            chatContainer.scrollTop = chatContainer.scrollHeight;
-
-            // Initialize new think sections in the message
-            initAllThinkSections();
-        }
-    `;
-
-    return `<!DOCTYPE html>
+	return `<!DOCTYPE html>
     <html>
     <head>
+        <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${webview.cspSource} https: data:; style-src ${webview.cspSource} 'unsafe-inline'; font-src ${webview.cspSource}; script-src 'nonce-${nonce}';">
         <style>
             body {
                 padding: 20px;
@@ -317,7 +90,7 @@ export function getChatWebviewContent(config: any): string {
                 font-size: 13px;
                 line-height: 1;
             }
-            
+
             .user-message .message-prefix::before {
                 order: 2; /* 将用户头像放在文字右边 */
                 margin-right: 0;
@@ -326,7 +99,7 @@ export function getChatWebviewContent(config: any): string {
                 content: '👤';
                 opacity: 0.8;
             }
-            
+
             .assistant-message .message-prefix::before {
                 background-color: transparent;
                 color: var(--vscode-textLink-foreground);
@@ -365,29 +138,87 @@ export function getChatWebviewContent(config: any): string {
                 box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
                 border: 1px solid var(--vscode-input-border);
             }
-            #web-search {
-                position: absolute;
-                top: -30px;
-                left: 15px;
-                z-index: 1;
-                display: flex;
+            /* Agent 状态栏 */
+            .agent-status {
+                margin-bottom: 10px;
+                padding: 8px 12px;
+                border-radius: 6px;
+                background: var(--vscode-editor-inactiveSelectionBackground);
+                border: 1px solid var(--vscode-input-border);
+                color: var(--vscode-foreground);
+                font-size: 12px;
+                display: none;
+                white-space: pre-wrap;
+                word-wrap: break-word;
+            }
+            /* 确认对话框 */
+            .confirm-dialog {
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(0, 0, 0, 0.4);
+                z-index: 2000;
+                display: none;
                 align-items: center;
-                gap: 4px;
-                padding: 4px 8px;
+                justify-content: center;
+            }
+            .confirm-content {
+                background: var(--vscode-editor-background);
+                border: 1px solid var(--vscode-input-border);
+                border-radius: 8px;
+                padding: 20px;
+                max-width: 480px;
+                width: 90%;
+                box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+            }
+            .confirm-title {
+                font-weight: 600;
+                margin-bottom: 10px;
+                color: var(--vscode-foreground);
+            }
+            .confirm-tool {
+                font-size: 13px;
+                color: var(--vscode-textLink-foreground);
+                margin-bottom: 6px;
+            }
+            .confirm-args {
+                font-size: 12px;
+                color: var(--vscode-descriptionForeground);
+                background: var(--vscode-input-background);
+                border: 1px solid var(--vscode-input-border);
+                border-radius: 4px;
+                padding: 8px;
+                margin-bottom: 14px;
+                max-height: 160px;
+                overflow-y: auto;
+                white-space: pre-wrap;
+                word-wrap: break-word;
+            }
+            .confirm-buttons {
+                display: flex;
+                justify-content: flex-end;
+                gap: 10px;
+            }
+            #confirm-allow {
+                background: var(--vscode-button-background);
+                color: var(--vscode-button-foreground);
+                border: none;
+                border-radius: 4px;
+                padding: 8px 20px;
+                cursor: pointer;
+            }
+            #confirm-allow:hover {
+                background: var(--vscode-button-hoverBackground);
+            }
+            #confirm-deny {
                 background: var(--vscode-button-secondaryBackground);
                 color: var(--vscode-button-secondaryForeground);
                 border: 1px solid var(--vscode-button-border);
                 border-radius: 4px;
+                padding: 8px 20px;
                 cursor: pointer;
-                font-size: 12px;
-            }
-            #web-search.active {
-                background: var(--vscode-button-background);
-                color: var(--vscode-button-foreground);
-            }
-            #web-search .status {
-                color: #666;
-                font-size: 10px;
             }
             #input-container {
                 display: flex;
@@ -490,7 +321,7 @@ export function getChatWebviewContent(config: any): string {
             .sending {
                 background: var(--vscode-errorForeground) !important;
             }
-            
+
             .sending:hover {
                 background: var(--vscode-errorForeground) !important;
                 opacity: 0.8;
@@ -512,11 +343,11 @@ export function getChatWebviewContent(config: any): string {
                 line-height: 0.5;
                 transition: opacity 0.2s ease;
             }
-            
+
             .menu-button:hover {
                 opacity: 1;
             }
-            
+
             /* 菜单样式优化 */
             .menu {
                 position: absolute;
@@ -530,11 +361,11 @@ export function getChatWebviewContent(config: any): string {
                 min-width: 120px;
                 display: none;
             }
-            
+
             .menu.show {
                 display: block;
             }
-            
+
             /* 修改二级菜单样式 */
             .has-submenu {
                 position: relative;
@@ -576,7 +407,7 @@ export function getChatWebviewContent(config: any): string {
                 white-space: nowrap;
                 transition: background-color 0.2s ease;
             }
-            
+
             .menu-item:hover {
                 background: var(--vscode-list-hoverBackground);
             }
@@ -595,31 +426,31 @@ export function getChatWebviewContent(config: any): string {
             .markdown-content {
                 line-height: 1.6;
             }
-            
+
             .markdown-content p {
                 margin-top: 0.4em;
                 margin-bottom: 0.4em;
             }
-            
-            .markdown-content h1, 
-            .markdown-content h2, 
-            .markdown-content h3, 
+
+            .markdown-content h1,
+            .markdown-content h2,
+            .markdown-content h3,
             .markdown-content h4 {
                 margin-top: 1em;
                 margin-bottom: 0.5em;
                 font-weight: 600;
             }
-            
-            .markdown-content ul, 
+
+            .markdown-content ul,
             .markdown-content ol {
                 padding-left: 1.5em;
                 margin: 0.5em 0;
             }
-            
+
             .markdown-content li {
                 margin-bottom: 0.25em;
             }
-            
+
             .markdown-content blockquote {
                 border-left: 4px solid var(--vscode-textBlockQuote-border);
                 margin: 0.5em 0;
@@ -628,34 +459,34 @@ export function getChatWebviewContent(config: any): string {
                 color: var(--vscode-textBlockQuote-foreground);
                 border-radius: 0 4px 4px 0;
             }
-            
+
             .markdown-content a {
                 color: var(--vscode-textLink-foreground);
                 text-decoration: none;
             }
-            
+
             .markdown-content a:hover {
                 text-decoration: underline;
                 color: var(--vscode-textLink-activeForeground);
             }
-            
+
             .markdown-content table {
                 border-collapse: collapse;
                 width: 100%;
                 margin: 1em 0;
             }
-            
-            .markdown-content th, 
+
+            .markdown-content th,
             .markdown-content td {
                 border: 1px solid var(--vscode-input-border);
                 padding: 8px 12px;
             }
-            
+
             .markdown-content th {
                 background: var(--vscode-editor-inactiveSelectionBackground);
                 font-weight: 600;
             }
-            
+
             /* 改进图片样式 */
             .markdown-content img {
                 max-width: 100%;
@@ -802,7 +633,7 @@ export function getChatWebviewContent(config: any): string {
             .think-header:hover {
                 background: var(--vscode-list-hoverBackground);
             }
-            
+
             /* 改进思考切换按钮样式 */
             .think-toggle {
                 display: inline-flex;
@@ -816,7 +647,7 @@ export function getChatWebviewContent(config: any): string {
                 font-size: 10px;
                 transition: transform 0.3s ease, background-color 0.2s ease;
             }
-            
+
             .think-header:hover .think-toggle {
                 background-color: var(--vscode-textLink-activeForeground);
             }
@@ -835,12 +666,12 @@ export function getChatWebviewContent(config: any): string {
                 color: var(--vscode-foreground);
                 border-top: 1px solid var(--vscode-input-border);
             }
-            
+
             /* 思考过程内容里的段落间距 */
             .think-content p {
                 margin: 0.4em 0;
             }
-            
+
             .think-content.collapsed {
                 max-height: 0 !important;
                 padding-top: 0 !important;
@@ -853,24 +684,24 @@ export function getChatWebviewContent(config: any): string {
             .think-header.collapsed .think-toggle {
                 transform: rotate(-90deg);
             }
-            
+
             /* Style for the actual response content after think section */
             .response-content {
                 margin-top: 15px;
                 width: 100%;
             }
-            
+
             /* Make sure code blocks and other content fit well */
             .markdown-content {
                 width: 100%;
             }
-            
+
             .markdown-content pre {
                 width: 100%;
                 max-width: 100%;
                 overflow-x: auto;
             }
-            
+
             /* Adjust spacing for better readability */
             .message-content.markdown-content p {
                 margin-top: 0.3em;
@@ -893,7 +724,7 @@ export function getChatWebviewContent(config: any): string {
                     transform: translateY(0);
                 }
             }
-            
+
             .message {
                 animation: messageAppear 0.3s ease forwards;
             }
@@ -907,14 +738,14 @@ export function getChatWebviewContent(config: any): string {
                 padding: 14px 18px;
                 border: 1px solid rgba(var(--vscode-textLink-foreground-rgb), 0.2); /* 添加淡边框 */
             }
-            
+
             .user-message .message-content {
                 color: var(--vscode-foreground); /* 使用主题的标准文字颜色 */
                 font-size: 1.05em;
                 font-weight: normal;
                 letter-spacing: 0.01em;
             }
-            
+
             .user-message .message-prefix {
                 align-self: flex-end; /* 用户消息前缀靠右 */
                 color: var(--vscode-descriptionForeground); /* 使用描述文字颜色 */
@@ -935,8 +766,8 @@ export function getChatWebviewContent(config: any): string {
             }
 
             .welcome-content {
-                background: linear-gradient(to right, 
-                                           rgba(var(--vscode-textLink-foreground-rgb), 0.1), 
+                background: linear-gradient(to right,
+                                           rgba(var(--vscode-textLink-foreground-rgb), 0.1),
                                            rgba(var(--vscode-textLink-foreground-rgb), 0.05));
                 border-radius: 12px;
                 padding: 20px 24px;
@@ -945,7 +776,7 @@ export function getChatWebviewContent(config: any): string {
                 transition: all 0.3s ease;
                 animation: fadeIn 0.5s ease-in;
             }
-            
+
             .welcome-title {
                 margin: 0 0 16px 0;
                 color: var(--vscode-foreground);
@@ -956,7 +787,7 @@ export function getChatWebviewContent(config: any): string {
                 align-items: center;
                 gap: 8px;
             }
-            
+
             .welcome-text {
                 margin: 0;
                 color: var(--vscode-foreground);
@@ -964,27 +795,27 @@ export function getChatWebviewContent(config: any): string {
                 line-height: 1.6;
                 opacity: 0.9;
             }
-            
+
             .welcome-link {
                 color: var(--vscode-textLink-foreground);
                 text-decoration: none;
                 font-weight: 500;
             }
-            
+
             .welcome-link:hover {
                 text-decoration: underline;
                 color: var(--vscode-textLink-activeForeground);
             }
-            
+
             /* 添加CSS变量提取函数 */
             :root {
                 --vscode-textLink-foreground-rgb: 0, 120, 212;
             }
-            
+
             .vscode-dark:root {
                 --vscode-textLink-foreground-rgb: 43, 136, 216;
             }
-            
+
             @keyframes fadeIn {
                 from {
                     opacity: 0;
@@ -996,25 +827,7 @@ export function getChatWebviewContent(config: any): string {
                 }
             }
         </style>
-        <script>
-            // Import marked from CDN instead
-            const markedScript = document.createElement('script');
-            markedScript.src = 'https://cdn.jsdelivr.net/npm/marked@9.0.0/marked.min.js';
-            document.head.appendChild(markedScript);
-            
-            markedScript.onload = function() {
-                // Configure marked to allow HTML
-                if (typeof marked !== 'undefined') {
-                    marked.setOptions({
-                        gfm: true,
-                        breaks: true,
-                        sanitize: false, // This is crucial - don't sanitize HTML content
-                        renderer: new marked.Renderer()
-                    });
-                    console.log('Marked library loaded and configured');
-                }
-            };
-        </script>
+        <script nonce="${nonce}" src="${markedUri}"></script>
     </head>
     <body>
         <div id="chat-container"></div>
@@ -1022,72 +835,230 @@ export function getChatWebviewContent(config: any): string {
         <div class="menu" id="menu">
             <div class="menu-item" id="clear-chat">Clear Chat</div>
         </div>
+        <div id="agent-status" class="agent-status"></div>
         <div class="input-wrapper">
-            <button id="web-search">
-                <span>Web Search</span>
-                <span class="status">●</span>
-            </button>
             <div id="input-container">
-                <textarea id="message-input" 
-                    placeholder="Ask anything, shift+enter for newline" 
+                <textarea id="message-input"
+                    placeholder="Ask anything, shift+enter for newline"
                     rows="1"></textarea>
                 <button id="send-button">Send</button>
             </div>
             <div class="author-info">
-                Created by <a href="https://github.com/warm3snow" target="_blank">warm3snow</a> | 
+                Created by <a href="https://github.com/warm3snow" target="_blank">warm3snow</a> |
                 <a href="https://github.com/warm3snow/vscode-ollama" target="_blank">GitHub Repository</a>
             </div>
         </div>
 
-        <script>
+        <div class="confirm-dialog" id="confirm-dialog">
+            <div class="confirm-content">
+                <div class="confirm-title" id="confirm-title">🧩 Agent 请求执行操作</div>
+                <div class="confirm-tool" id="confirm-tool"></div>
+                <div class="confirm-args" id="confirm-args"></div>
+                <div class="confirm-buttons">
+                    <button id="confirm-deny">拒绝</button>
+                    <button id="confirm-allow">允许</button>
+                </div>
+            </div>
+        </div>
+
+        <script nonce="${nonce}">
             const vscode = acquireVsCodeApi();
-            let webSearchEnabled = false;
+
+            // 全局错误捕获:转发到扩展端,便于排查 webview 脚本问题
+            window.addEventListener('error', (e) => {
+                vscode.postMessage({
+                    command: 'webviewError',
+                    message: e.message,
+                    stack: e.error ? e.error.stack : ''
+                });
+            });
+
+            let webSearchEnabled = true;   // mandatory
+            let agentModeEnabled = true;   // mandatory
+            let pendingConfirmRequestId = null;
             let isGenerating = false;
             let currentModelName = 'Assistant';
+            let currentConversationId = null;
             let chatContainer;
+            let selectedCommandIndex = -1;
+
+            // 转义 HTML，防止 LLM/用户输入注入脚本（XSS 防护）
+            function escapeHtml(text) {
+                return String(text)
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;');
+            }
+
+            // 初始化单个think section
+            function initThinkSection(thinkId) {
+                const header = document.querySelector('[data-think-id="' + thinkId + '"]');
+                const content = document.getElementById(thinkId);
+
+                if (!header || !content) {
+                    return;
+                }
+
+                if (!header.hasAttribute('data-initialized')) {
+                    header.setAttribute('data-initialized', 'true');
+
+                    // 默认展开
+                    content.classList.remove('collapsed');
+                    header.classList.remove('collapsed');
+
+                    const toggle = header.querySelector('.think-toggle');
+                    if (toggle) {
+                        toggle.textContent = '▼';
+                    }
+
+                    header.addEventListener('click', function() {
+                        content.classList.toggle('collapsed');
+                        header.classList.toggle('collapsed');
+                        const toggle = header.querySelector('.think-toggle');
+                        if (toggle) {
+                            toggle.textContent = content.classList.contains('collapsed') ? '▶' : '▼';
+                        }
+                    });
+                }
+            }
+
+            // 初始化所有think sections
+            function initAllThinkSections() {
+                const headers = document.querySelectorAll('.think-header[data-think-id]');
+                headers.forEach(header => {
+                    const thinkId = header.getAttribute('data-think-id');
+                    if (thinkId) {
+                        initThinkSection(thinkId);
+                    }
+                });
+            }
+
+            // 渲染助手内容：先提取 think 标签（扩展自身标记），其余内容转义后交给 marked
+            function renderAssistantContent(processedContent, contentDiv) {
+                if (processedContent.includes('<think>') && processedContent.includes('</think>')) {
+                    const thinkMatch = processedContent.match(/<think>([\\s\\S]*?)<\\/think>/);
+                    if (thinkMatch) {
+                        const thinkContent = thinkMatch[1];
+                        const remainingContent = processedContent.replace(/<think>[\\s\\S]*?<\\/think>/, '').trim();
+                        const thinkId = 'think-' + Math.random().toString(36).substr(2, 9);
+
+                        const thinkHtml = [
+                            '<div class="think-section">',
+                            '    <div class="think-header" data-think-id="' + thinkId + '">',
+                            '        <span class="think-toggle">▼</span>',
+                            '        <span>思考过程</span>',
+                            '    </div>',
+                            '    <div class="think-content" id="' + thinkId + '">' + escapeHtml(thinkContent).replace(/\\n/g, '<br>') + '</div>',
+                            '</div>'
+                        ].join('');
+
+                        contentDiv.innerHTML = thinkHtml;
+
+                        if (remainingContent) {
+                            const responseDiv = document.createElement('div');
+                            responseDiv.className = 'response-content';
+                            responseDiv.innerHTML = marked.parse(escapeHtml(remainingContent), {
+                                breaks: true,
+                                gfm: true,
+                                xhtml: true
+                            });
+                            contentDiv.appendChild(responseDiv);
+                        }
+
+                        setTimeout(() => initThinkSection(thinkId), 0);
+                        return;
+                    }
+                }
+                contentDiv.innerHTML = marked.parse(escapeHtml(processedContent), {
+                    breaks: true,
+                    gfm: true,
+                    xhtml: true
+                });
+            }
+
+            // 追加消息
+            function appendMessage(content, isUser) {
+                let currentGroup = chatContainer.lastElementChild;
+
+                if (isUser || !currentGroup || !currentGroup.classList.contains('conversation-group')) {
+                    currentGroup = document.createElement('div');
+                    currentGroup.className = 'conversation-group';
+                    chatContainer.appendChild(currentGroup);
+                }
+
+                const messageDiv = document.createElement('div');
+                messageDiv.className = 'message ' + (isUser ? 'user-message' : 'assistant-message');
+
+                if (!isUser) {
+                    messageDiv.setAttribute('data-conversation-id', currentConversationId || '');
+                }
+
+                const prefixDiv = document.createElement('div');
+                prefixDiv.className = 'message-prefix';
+                prefixDiv.textContent = isUser ? '你' : currentModelName;
+                messageDiv.appendChild(prefixDiv);
+
+                const contentDiv = document.createElement('div');
+                contentDiv.className = 'message-content markdown-content';
+
+                if (isUser) {
+                    // 用户消息：转义后显示（<br> 由扩展端换行符处理）
+                    contentDiv.innerHTML = escapeHtml(content).replace(/\\n/g, '<br>');
+                } else {
+                    // 保存原始内容供流式追加
+                    contentDiv.setAttribute('data-markdown-content', content);
+                    const processedContent = content.replace(/\\\\u003c/g, '<').replace(/\\\\u003e/g, '>');
+                    renderAssistantContent(processedContent, contentDiv);
+                }
+
+                messageDiv.appendChild(contentDiv);
+                currentGroup.appendChild(messageDiv);
+                chatContainer.scrollTop = chatContainer.scrollHeight;
+                initAllThinkSections();
+            }
 
             // Initialize when DOM is ready
             document.addEventListener('DOMContentLoaded', () => {
                 chatContainer = document.getElementById('chat-container');
-                // 初始化所有已存在的think sections
                 initAllThinkSections();
             });
 
-            ${processMessageFn}
-            ${appendMessageFn}
-
             // Initialize UI elements
             const messageInput = document.getElementById('message-input');
-            const webSearchButton = document.getElementById('web-search');
             const sendButton = document.getElementById('send-button');
             const menuButton = document.getElementById('menu-button');
             const menu = document.getElementById('menu');
             const clearChatButton = document.getElementById('clear-chat');
 
-            // Log initialization
-            console.log('Webview initialized');
-            console.log('Initial web search state:', webSearchEnabled);
-
-            // Web search button click handler
-            webSearchButton.onclick = () => {
-                webSearchEnabled = !webSearchEnabled;
-                webSearchButton.classList.toggle('active', webSearchEnabled);
-                const status = webSearchButton.querySelector('.status');
-                if (status) {
-                    status.style.color = webSearchEnabled ? '#4CAF50' : '#666';
+            // 确认对话框按钮
+            document.getElementById('confirm-allow').onclick = () => {
+                if (pendingConfirmRequestId) {
+                    vscode.postMessage({
+                        command: 'confirmActionResult',
+                        requestId: pendingConfirmRequestId,
+                        approved: true
+                    });
                 }
-                console.log('Web search toggled:', webSearchEnabled);
+                pendingConfirmRequestId = null;
+                document.getElementById('confirm-dialog').style.display = 'none';
+            };
+            document.getElementById('confirm-deny').onclick = () => {
+                if (pendingConfirmRequestId) {
+                    vscode.postMessage({
+                        command: 'confirmActionResult',
+                        requestId: pendingConfirmRequestId,
+                        approved: false
+                    });
+                }
+                pendingConfirmRequestId = null;
+                document.getElementById('confirm-dialog').style.display = 'none';
             };
 
             // Send message function
             function sendMessage() {
                 const content = messageInput.value.trim();
                 if (!content || isGenerating) return;
-
-                console.log('Preparing to send message:', {
-                    content,
-                    webSearch: webSearchEnabled
-                });
 
                 appendMessage(content, true);
                 messageInput.value = '';
@@ -1098,6 +1069,7 @@ export function getChatWebviewContent(config: any): string {
                     command: 'sendMessage',
                     content,
                     webSearch: webSearchEnabled,
+                    agentMode: agentModeEnabled,
                     resetContext: false
                 });
             }
@@ -1105,7 +1077,6 @@ export function getChatWebviewContent(config: any): string {
             // Send button click handler
             sendButton.onclick = () => {
                 if (!isGenerating) {
-                    console.log('Sending message with web search:', webSearchEnabled);
                     sendMessage();
                 } else {
                     vscode.postMessage({
@@ -1128,19 +1099,14 @@ export function getChatWebviewContent(config: any): string {
                 }
             });
 
-            // 修改清除对话的处理逻辑
+            // 清除对话的处理逻辑
             clearChatButton.onclick = () => {
-                // 保存欢迎消息
                 const welcomeMessage = chatContainer.querySelector('.welcome-message');
-                
-                // 清除所有消息
                 chatContainer.innerHTML = '';
-                
-                // 如果存在欢迎消息，重新添加
+
                 if (welcomeMessage) {
                     chatContainer.appendChild(welcomeMessage.cloneNode(true));
                 } else {
-                    // If not, create a new one
                     const welcomeDiv = document.createElement('div');
                     welcomeDiv.className = 'message assistant-message welcome-message';
                     welcomeDiv.innerHTML = [
@@ -1158,37 +1124,28 @@ export function getChatWebviewContent(config: any): string {
                     chatContainer.appendChild(welcomeDiv);
                 }
 
-                // 重置状态
                 vscode.setState({ messages: [] });
                 menu.classList.remove('show');
             };
 
-            // 修改命令定义
+            // 命令定义
             const commands = [
                 {
                     name: '/reset',
                     description: '重置对话上下文',
                     execute: () => {
-                        // 清空消息历史
                         vscode.postMessage({
                             command: 'resetContext'
                         });
-                        
-                        // 创建新的对话组
+
                         const newGroup = document.createElement('div');
                         newGroup.className = 'conversation-group';
-                        
-                        // 显示重置提示
+
                         const resetNotification = document.createElement('div');
                         resetNotification.className = 'message assistant-message';
-                        const modelName = currentModelName || 'Assistant'; // 使用当前模型名称，如果未定义则使用默认值
-                        resetNotification.innerHTML = \`
-                            <div class="message-prefix">\${modelName || 'Assistant'}</div>
-                            <div class="message-content markdown-content">
-                                <p>对话上下文已重置。</p>
-                            </div>
-                        \`;
-                        
+                        const modelName = currentModelName || 'Assistant';
+                        resetNotification.innerHTML = '<div class="message-prefix">' + modelName + '</div><div class="message-content markdown-content"><p>对话上下文已重置。</p></div>';
+
                         newGroup.appendChild(resetNotification);
                         chatContainer.appendChild(newGroup);
                         chatContainer.scrollTop = chatContainer.scrollHeight;
@@ -1198,48 +1155,41 @@ export function getChatWebviewContent(config: any): string {
             ];
 
             let commandSuggestions = null;
-            let selectedCommandIndex = -1;
 
-            // 修改命令提示的更新逻辑
+            // 命令提示的更新逻辑
             function updateCommandSuggestions(input) {
                 const suggestionsDiv = document.getElementById('command-suggestions');
                 if (!suggestionsDiv) {
-                    // 如果建议框不存在，创建它
                     const div = document.createElement('div');
                     div.id = 'command-suggestions';
                     document.querySelector('.input-wrapper').appendChild(div);
+                    // CSP 兼容:事件委托代替内联 onclick
+                    div.addEventListener('click', (e) => {
+                        const item = e.target.closest('.command-item');
+                        if (item) {
+                            selectCommand(item.getAttribute('data-command'));
+                        }
+                    });
                     return updateCommandSuggestions(input);
                 }
 
                 // 当输入 '/' 时显示所有命令
                 if (input === '/') {
                     selectedCommandIndex = -1;
-                    const suggestionsHtml = commands.map((cmd, index) => \`
-                        <div class="command-item" data-command="\${cmd.name}" onclick="selectCommand('\${cmd.name}')">
-                            <span class="command-name">\${cmd.name}</span>
-                            <span class="command-description">\${cmd.description}</span>
-                        </div>
-                    \`).join('');
-                    
+                    const suggestionsHtml = commands.map((cmd, index) => '<div class="command-item" data-command="' + cmd.name + '"><span class="command-name">' + cmd.name + '</span><span class="command-description">' + cmd.description + '</span></div>').join('');
                     suggestionsDiv.innerHTML = suggestionsHtml;
                     suggestionsDiv.style.display = 'block';
                 }
                 // 当输入以 '/' 开头的其他内容时，进行过滤
                 else if (input.startsWith('/')) {
                     const query = input.toLowerCase();
-                    const filteredCommands = commands.filter(cmd => 
+                    const filteredCommands = commands.filter(cmd =>
                         cmd.name.toLowerCase().startsWith(query)
                     );
 
                     if (filteredCommands.length > 0) {
                         selectedCommandIndex = -1;
-                        const suggestionsHtml = filteredCommands.map((cmd, index) => \`
-                            <div class="command-item" data-command="\${cmd.name}" onclick="selectCommand('\${cmd.name}')">
-                                <span class="command-name">\${cmd.name}</span>
-                                <span class="command-description">\${cmd.description}</span>
-                            </div>
-                        \`).join('');
-                        
+                        const suggestionsHtml = filteredCommands.map((cmd, index) => '<div class="command-item" data-command="' + cmd.name + '"><span class="command-name">' + cmd.name + '</span><span class="command-description">' + cmd.description + '</span></div>').join('');
                         suggestionsDiv.innerHTML = suggestionsHtml;
                         suggestionsDiv.style.display = 'block';
                     } else {
@@ -1250,21 +1200,21 @@ export function getChatWebviewContent(config: any): string {
                 }
             }
 
-            // 添加命令选择函数
+            // 命令选择函数
             function selectCommand(commandName) {
                 messageInput.value = commandName + ' ';
                 hideCommandSuggestions();
                 messageInput.focus();
             }
 
-            // 修改键盘事件处理
+            // 键盘事件处理
             messageInput.addEventListener('keydown', (e) => {
                 const suggestionsDiv = document.getElementById('command-suggestions');
                 const isVisible = suggestionsDiv && suggestionsDiv.style.display === 'block';
 
                 if (isVisible) {
                     const items = suggestionsDiv.querySelectorAll('.command-item');
-                    
+
                     if (e.key === 'Tab') {
                         e.preventDefault();
                         if (items.length > 0) {
@@ -1275,7 +1225,7 @@ export function getChatWebviewContent(config: any): string {
                         }
                     } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
                         e.preventDefault();
-                        
+
                         if (e.key === 'ArrowUp') {
                             selectedCommandIndex = selectedCommandIndex <= 0 ? items.length - 1 : selectedCommandIndex - 1;
                         } else {
@@ -1316,18 +1266,18 @@ export function getChatWebviewContent(config: any): string {
                 }
             });
 
-            // 修改输入事件处理
+            // 输入事件处理
             messageInput.addEventListener('input', (e) => {
                 const input = e.target.value;
                 updateCommandSuggestions(input);
-                
-                // 保持原有的自动调整高度功能
+
+                // 自动调整高度
                 e.target.style.height = 'auto';
                 const newHeight = Math.min(e.target.scrollHeight, 200);
                 e.target.style.height = newHeight + 'px';
             });
 
-            // 添加点击外部关闭提示的处理
+            // 点击外部关闭提示
             document.addEventListener('click', (e) => {
                 const suggestionsDiv = document.getElementById('command-suggestions');
                 const inputWrapper = document.querySelector('.input-wrapper');
@@ -1348,102 +1298,65 @@ export function getChatWebviewContent(config: any): string {
                 isGenerating = generating;
                 sendButton.textContent = generating ? 'Stop' : 'Send';
                 sendButton.classList.toggle('sending', generating);
-                
-                // 更新输入框状态和光标样式
+
                 messageInput.disabled = generating;
                 messageInput.style.opacity = generating ? '0.7' : '1';
                 messageInput.style.cursor = generating ? 'not-allowed' : 'text';
+            }
+
+            // 构建欢迎消息
+            function createWelcomeMessage() {
+                const welcomeDiv = document.createElement('div');
+                welcomeDiv.className = 'message assistant-message welcome-message';
+                welcomeDiv.innerHTML = [
+                    '<div class="welcome-content">',
+                    '  <h2 class="welcome-title">',
+                    '    👋 Welcome to VSCode Ollama!',
+                    '  </h2>',
+                    '  <p class="welcome-text">',
+                    '    <a href="https://github.com/warm3snow/vscode-ollama" class="welcome-link">[vscode-ollama]</a> is a VS Code extension based on local Ollama service, supporting model configuration, web search, and more. Star the GitHub repo to support ongoing development!',
+                    '    <br><br>',
+                    '    GitHub: <a href="https://github.com/warm3snow/vscode-ollama" class="welcome-link">https://github.com/warm3snow/vscode-ollama</a>',
+                    '  </p>',
+                    '</div>'
+                ].join('');
+                return welcomeDiv;
             }
 
             // Message event listener
             window.addEventListener('message', event => {
                 const message = event.data;
                 if (message.command === 'resetChat') {
-                    // 清除所有正在流式传输的消息
                     const streamingMessages = document.querySelectorAll('.message.assistant-message.streaming');
                     streamingMessages.forEach(msg => {
                         msg.classList.remove('streaming');
                     });
                 } else if (message.command === 'streamMessage') {
-                    
+
                     if (message.newMessage) {
                         currentConversationId = message.conversationId;
-                        appendMessage(message.content, false);
-                    } else {
-                        // 使用字符串连接而不是嵌套的模板字符串
-                        const selector = '.assistant-message[data-conversation-id="' + message.conversationId + '"] .message-content';
-                        const messageDiv = document.querySelector(selector);
-                        if (messageDiv) {
-                            const currentText = messageDiv.getAttribute('data-markdown-content') || '';
-                            const newText = currentText + message.content;
-                            messageDiv.setAttribute('data-markdown-content', newText);
-                            
-                            // 处理转义字符
-                            let processedContent = newText.replace(/\\\\u003c/g, '<')
-                                                       .replace(/\\\\u003e/g, '>');
-                            
-                            // 检查是否包含think标签
-                            if (processedContent.includes('<think>') && processedContent.includes('</think>')) {
-                                
-                                // 分离思考内容和实际回复
-                                const thinkMatch = processedContent.match(/<think>([\\s\\S]*?)<\\/think>/);
-                                
-                                if (thinkMatch) {
-                                    const thinkContent = thinkMatch[1];
-                                    const remainingContent = processedContent.replace(/<think>[\\s\\S]*?<\\/think>/, '').trim();
-                                    
-                                    // 生成唯一ID
-                                    const thinkId = 'think-' + Math.random().toString(36).substr(2, 9);
-                                    
-                                    // 先添加思考部分
-                                    const thinkHtml = [
-                                        '<div class="think-section">',
-                                        '    <div class="think-header" data-think-id="' + thinkId + '">',
-                                        '        <span class="think-toggle">▼</span>',
-                                        '        <span>思考过程</span>',
-                                        '    </div>',
-                                        '    <div class="think-content" id="' + thinkId + '">' + thinkContent.replace(/\\n/g, '<br>') + '</div>',
-                                        '</div>'
-                                    ].join('');
-                                    
-                                    // 然后添加实际回复部分
-                                    const markedOptions = {
-                                        breaks: true,
-                                        gfm: true,
-                                        xhtml: true
-                                    };
-                                    
-                                    messageDiv.innerHTML = thinkHtml;
-                                    
-                                    if (remainingContent) {
-                                        const responseDiv = document.createElement('div');
-                                        responseDiv.className = 'response-content';
-                                        responseDiv.innerHTML = marked.parse(remainingContent, markedOptions);
-                                        messageDiv.appendChild(responseDiv);
-                                    }
-                                    
-                                    // 在下一个事件循环中初始化思考部分
-                                    setTimeout(() => initThinkSection(thinkId), 0);
-                                } else {
-                                    // 如果未正确匹配，则按常规处理
-                                    messageDiv.innerHTML = marked.parse(processedContent, {
-                                        breaks: true,
-                                        gfm: true,
-                                        xhtml: true
-                                    });
-                                }
-                            } else {
-                                // 部分更新或没有think标签时，按常规处理
-                                messageDiv.innerHTML = marked.parse(processedContent, {
-                                    breaks: true,
-                                    gfm: true,
-                                    xhtml: true
-                                });
-                            }
-                            
-                            // 滚动到底部
-                            chatContainer.scrollTop = chatContainer.scrollHeight;
-                        }
+                        appendMessage('', false);
+                    }
+
+                    const selector = '.assistant-message[data-conversation-id="' + message.conversationId + '"] .message-content';
+                    let messageDiv = document.querySelector(selector);
+
+                    // 兜底：如果消息尚未创建（例如 Agent 在无内容输出时直接结束），创建一条空消息
+                    if (!messageDiv && message.conversationId) {
+                        currentConversationId = message.conversationId;
+                        appendMessage('', false);
+                        messageDiv = document.querySelector(selector);
+                    }
+
+                    if (messageDiv) {
+                        const currentText = messageDiv.getAttribute('data-markdown-content') || '';
+                        const newText = currentText + message.content;
+                        messageDiv.setAttribute('data-markdown-content', newText);
+
+                        const processedContent = newText.replace(/\\\\u003c/g, '<').replace(/\\\\u003e/g, '>');
+                        renderAssistantContent(processedContent, messageDiv);
+
+                        chatContainer.scrollTop = chatContainer.scrollHeight;
                     }
 
                     // 当消息完成时重置状态
@@ -1452,49 +1365,39 @@ export function getChatWebviewContent(config: any): string {
                         updateSendButton(false);
                         messageInput.focus();
                     }
-                } else if (message.command === 'receiveMessage') {
-                    appendMessage(message.content, false);
+                } else if (message.command === 'agentStatus') {
+                    const statusEl = document.getElementById('agent-status');
+                    if (!statusEl) {
+                        return;
+                    }
+                    const ev = message.event;
+                    if (ev.type === 'thinking') {
+                        statusEl.textContent = '🤔 思考中...';
+                        statusEl.style.display = 'block';
+                    } else                     if (ev.type === 'tool_call') {
+                        statusEl.textContent = '🔧 调用工具: ' + ev.toolName + '\\n' + (ev.args || '');
+                        statusEl.style.display = 'block';
+                    } else if (ev.type === 'tool_result') {
+                        statusEl.textContent = '✅ 工具完成: ' + ev.toolName + '\\n' + (ev.result || '');
+                        statusEl.style.display = 'block';
+                    } else if (ev.type === 'done') {
+                        statusEl.style.display = 'none';
+                    } else if (ev.type === 'error') {
+                        statusEl.textContent = '⚠️ ' + (ev.message || 'Agent 出错');
+                        statusEl.style.display = 'block';
+                    }
+                } else if (message.command === 'confirmAction') {
+                    pendingConfirmRequestId = message.request.requestId;
+                    const isPlan = message.request.kind === 'plan';
+                    document.getElementById('confirm-title').textContent = isPlan ? '📋 Agent 提议实施计划' : '🧩 Agent 请求执行操作';
+                    document.getElementById('confirm-tool').textContent = isPlan ? 'Implementation Plan' : message.request.toolName;
+                    document.getElementById('confirm-args').textContent = message.request.args || '{}';
+                    document.getElementById('confirm-dialog').style.display = 'flex';
                 } else if (message.command === 'welcomeMessage') {
-                    // 创建并添加欢迎消息
-                    const welcomeDiv = document.createElement('div');
-                    welcomeDiv.className = 'message assistant-message welcome-message';
-                    welcomeDiv.innerHTML = [
-                        '<div class="welcome-content">',
-                        '  <h2 class="welcome-title">',
-                        '    👋 Welcome to VSCode Ollama!',
-                        '  </h2>',
-                        '  <p class="welcome-text">',
-                        '    <a href="https://github.com/warm3snow/vscode-ollama" class="welcome-link">[vscode-ollama]</a> is a VS Code extension based on local Ollama service, supporting model configuration, web search, and more. Star the GitHub repo to support ongoing development!',
-                        '    <br><br>',
-                        '    GitHub: <a href="https://github.com/warm3snow/vscode-ollama" class="welcome-link">https://github.com/warm3snow/vscode-ollama</a>',
-                        '  </p>',
-                        '</div>'
-                    ].join('');
-                    chatContainer.appendChild(welcomeDiv);
+                    chatContainer.appendChild(createWelcomeMessage());
                     chatContainer.scrollTop = chatContainer.scrollHeight;
                 } else if (message.command === 'updateModelName') {
                     currentModelName = message.modelName;
-                } else if (message.command === 'saveSuccess') {
-                    // 添加保存成功的提示
-                    const notification = document.createElement('div');
-                    notification.className = 'save-notification';
-                    notification.textContent = '设置已保存';
-                    document.body.appendChild(notification);
-
-                    // 2秒后自动移除提示
-                    setTimeout(() => {
-                        notification.remove();
-                    }, 2000);
-                } else if (message.command === 'forceEndChat') {
-                    // 强制结束当前对话，确保下一次对话会创建新的对话组
-                    const streamingDiv = document.querySelector('.message.assistant-message.streaming');
-                    if (streamingDiv) {
-                        streamingDiv.classList.remove('streaming');
-                    }
-                    // 创建新的空对话组，为下一次对话做准备
-                    const newGroup = document.createElement('div');
-                    newGroup.className = 'conversation-group';
-                    chatContainer.appendChild(newGroup);
                 }
             });
 
@@ -1503,74 +1406,6 @@ export function getChatWebviewContent(config: any): string {
                 vscode.postMessage({
                     command: 'webviewReady'
                 });
-            });
-
-            // 更新选中状态
-            function updateSelection() {
-                const items = document.querySelectorAll('.command-item');
-                items.forEach((item, index) => {
-                    if (index === selectedCommandIndex) {
-                        item.classList.add('selected');
-                        const command = item.getAttribute('data-command');
-                        if (command) {
-                            document.getElementById('message-input').value = command;
-                        }
-                    } else {
-                        item.classList.remove('selected');
-                    }
-                });
-            }
-
-            // 修改主题切换相关代码
-            const themeLightItem = document.getElementById('theme-light');
-            const themeDarkItem = document.getElementById('theme-dark');
-
-            // 更新主题菜单项状态
-            function updateThemeMenuState(isDark) {
-                if (!themeLightItem || !themeDarkItem) {
-                    return;
-                }
-                
-                // 更新菜单项状态
-                themeLightItem.classList.toggle('active', !isDark);
-                themeDarkItem.classList.toggle('active', isDark);
-            }
-
-            // 初始化主题状态
-            const isDarkTheme = document.body.classList.contains('vscode-dark');
-            updateThemeMenuState(isDarkTheme);
-
-            // 添加主题切换事件监听
-            if (themeLightItem) {
-                themeLightItem.onclick = (e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    vscode.postMessage({
-                        command: 'toggleTheme',
-                        theme: 'light'
-                    });
-                    menu.classList.remove('show');
-                };
-            }
-
-            if (themeDarkItem) {
-                themeDarkItem.onclick = (e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    vscode.postMessage({
-                        command: 'toggleTheme',
-                        theme: 'dark'
-                    });
-                    menu.classList.remove('show');
-                };
-            }
-
-            // 监听主题变化消息
-            window.addEventListener('message', event => {
-                const message = event.data;
-                if (message.command === 'themeChanged') {
-                    updateThemeMenuState(message.isDark);
-                }
             });
         </script>
     </body>
