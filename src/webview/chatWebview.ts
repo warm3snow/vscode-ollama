@@ -934,6 +934,41 @@ export function getChatWebviewContent(config: ChatConfig, webview: vscode.Webvie
                 });
             }
 
+            function sanitizeAssistantProtocolContent(content) {
+                const slash = String.fromCharCode(92);
+                let result = content
+                    .split(slash + 'u003c').join('<')
+                    .split(slash + 'u003e').join('>');
+                const startTag = '<tool_response';
+                const endTag = '</tool_response';
+
+                while (true) {
+                    const lower = result.toLowerCase();
+                    const start = lower.indexOf(startTag);
+                    if (start < 0) {
+                        break;
+                    }
+                    const openingEnd = lower.indexOf('>', start + startTag.length);
+                    if (openingEnd < 0) {
+                        result = result.slice(0, start);
+                        break;
+                    }
+                    const close = lower.indexOf(endTag, openingEnd + 1);
+                    if (close < 0) {
+                        result = result.slice(0, start);
+                        break;
+                    }
+                    const closingEnd = lower.indexOf('>', close + endTag.length);
+                    if (closingEnd < 0) {
+                        result = result.slice(0, start);
+                        break;
+                    }
+                    result = result.slice(0, start) + result.slice(closingEnd + 1);
+                }
+
+                return result.trim();
+            }
+
             // 渲染助手内容：先提取 think 标签（扩展自身标记），其余内容转义后交给 marked
             function renderAssistantContent(processedContent, contentDiv) {
                 if (processedContent.includes('<think>') && processedContent.includes('</think>')) {
@@ -1008,7 +1043,7 @@ export function getChatWebviewContent(config: ChatConfig, webview: vscode.Webvie
                 } else {
                     // 保存原始内容供流式追加
                     contentDiv.setAttribute('data-markdown-content', content);
-                    const processedContent = content.replace(/\\\\u003c/g, '<').replace(/\\\\u003e/g, '>');
+                    const processedContent = sanitizeAssistantProtocolContent(content);
                     renderAssistantContent(processedContent, contentDiv);
                 }
 
@@ -1353,7 +1388,7 @@ export function getChatWebviewContent(config: ChatConfig, webview: vscode.Webvie
                         const newText = currentText + message.content;
                         messageDiv.setAttribute('data-markdown-content', newText);
 
-                        const processedContent = newText.replace(/\\\\u003c/g, '<').replace(/\\\\u003e/g, '>');
+                        const processedContent = sanitizeAssistantProtocolContent(newText);
                         renderAssistantContent(processedContent, messageDiv);
 
                         chatContainer.scrollTop = chatContainer.scrollHeight;

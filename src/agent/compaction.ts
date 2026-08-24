@@ -28,7 +28,7 @@ export function estimateMessageTokens(messages: OllamaMessage[]): number {
  * 返回 0 表示无需总结(内容还不足)。
  */
 export function findCompactionCutPoint(messages: OllamaMessage[], keepTokens: number): number {
-	// 从末尾往前累积最近消息,直到超出预算
+	// 从末尾往前累积最近消息,直到超出预算。
 	let tailTokens = 0;
 	let cutPoint = messages.length;
 	for (let i = messages.length - 1; i >= 1; i--) {
@@ -39,8 +39,29 @@ export function findCompactionCutPoint(messages: OllamaMessage[], keepTokens: nu
 		tailTokens += tokens;
 		cutPoint = i;
 	}
+
+	// 不允许从 tool 消息开始保留,也不允许把带 tool_calls 的 assistant
+	// 与紧随其后的 tool 结果拆开。否则压缩后的请求会违反 tool_call_id 配对协议。
+	while (cutPoint > 1 && !isSafeCompactionBoundary(messages, cutPoint)) {
+		cutPoint--;
+	}
+
 	// 可被总结的区间为 [1, cutPoint);若只剩 system,无需总结
 	return cutPoint <= 1 ? 0 : cutPoint;
+}
+
+function isSafeCompactionBoundary(messages: OllamaMessage[], index: number): boolean {
+	const firstRecent = messages[index];
+	if (!firstRecent || firstRecent.role === 'tool') {
+		return false;
+	}
+
+	const previous = messages[index - 1];
+	if (previous?.role === 'assistant' && (previous.tool_calls?.length ?? 0) > 0) {
+		return false;
+	}
+
+	return true;
 }
 
 /**

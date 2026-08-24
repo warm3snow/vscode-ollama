@@ -8,12 +8,35 @@ const RETRY_DELAY = 1000;
 const REQUEST_TIMEOUT = 10000; // 10s
 const MAX_CONTENT_LENGTH = 1000; // 每个链接内容最大字符数
 
-const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+const delay = (ms: number, signal?: AbortSignal) => new Promise<void>((resolve, reject) => {
+	let settled = false;
+	let timer: ReturnType<typeof setTimeout>;
+	const onAbort = () => {
+		if (settled) {
+			return;
+		}
+		settled = true;
+		clearTimeout(timer);
+		signal?.removeEventListener('abort', onAbort);
+		reject(new Error('Web search cancelled.'));
+	};
+	const finish = () => {
+		if (settled) {
+			return;
+		}
+		settled = true;
+		signal?.removeEventListener('abort', onAbort);
+		resolve();
+	};
+	timer = setTimeout(finish, ms);
+	signal?.addEventListener('abort', onAbort, { once: true });
+});
 
 export interface SearchWebOptions {
 	provider?: string;
 	cacheTimeoutMinutes?: number;
 	requestsPerMinute?: number;
+	signal?: AbortSignal;
 }
 
 // 模块级缓存（跨调用共享）
@@ -47,6 +70,12 @@ export const searchWeb = async (query: string, options: SearchWebOptions = {}): 
 	const provider = options.provider || 'bing';
 	const cacheTimeoutMinutes = options.cacheTimeoutMinutes ?? 60;
 	const requestsPerMinute = options.requestsPerMinute ?? 10;
+	if (!Number.isFinite(requestsPerMinute) || requestsPerMinute <= 0) {
+		throw new Error('requestsPerMinute must be greater than 0.');
+	}
+	if (options.signal?.aborted) {
+		throw new Error('Web search cancelled.');
+	}
 
 	// 动态调整限流配置（配置变更时重建）
 	if (rateLimiter.maxRequests !== requestsPerMinute) {
@@ -65,10 +94,10 @@ export const searchWeb = async (query: string, options: SearchWebOptions = {}): 
 	}
 
 	// 检查限流
-	await rateLimiter.waitForAvailability();
+	await rateLimiter.waitForAvailability(options.signal);
 
 	try {
-		const results = await webSearchByProvider(provider, query);
+		const results = await webSearchByProvider(provider, query, options.signal);
 		if (results.length === 0) {
 			return {
 				results: [],
@@ -84,12 +113,15 @@ export const searchWeb = async (query: string, options: SearchWebOptions = {}): 
 			}
 
 			try {
-				const content = await fetchPageContent(result.url);
+				const content = await fetchPageContent(result.url, options.signal);
 				if (content) {
 					pageCache.set(result.url, content);
 				}
 				return content;
 			} catch (error) {
+				if (options.signal?.aborted) {
+					throw error;
+				}
 				console.error(`Failed to fetch content for ${result.url}:`, error);
 				return '';
 			}
@@ -111,16 +143,16 @@ export const searchWeb = async (query: string, options: SearchWebOptions = {}): 
 	}
 };
 
-async function webSearchByProvider(provider: string, query: string): Promise<SearchResult[]> {
+async function webSearchByProvider(provider: string, query: string, signal?: AbortSignal): Promise<SearchResult[]> {
 	switch (provider) {
 		case 'bing':
-			return webBingSearch(query);
+			return webBingSearch(query, signal);
 		default:
-			return webBingSearch(query);
+			return webBingSearch(query, signal);
 	}
 }
 
-async function webBingSearch(query: string): Promise<SearchResult[]> {
+async function webBingSearch(query: string, signal?: AbortSignal): Promise<SearchResult[]> {
 	let attempts = 0;
 	while (attempts < RETRY_ATTEMPTS) {
 		try {
@@ -132,7 +164,8 @@ async function webBingSearch(query: string): Promise<SearchResult[]> {
 						'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
 						'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8'
 					}
-				}
+				},
+				signal
 			);
 
 			if (!searchResponse.ok) {
@@ -172,34 +205,44 @@ async function webBingSearch(query: string): Promise<SearchResult[]> {
 			return results;
 
 		} catch (error) {
+			if (signal?.aborted) {
+				throw error;
+			}
 			console.error(`Bing search attempt ${attempts + 1} failed:`, error);
 			attempts++;
 			if (attempts === RETRY_ATTEMPTS) {
 				console.error('All attempts failed for Bing search');
 				return [];
 			}
-			await delay(RETRY_DELAY * attempts);
+			await delay(RETRY_DELAY * attempts, signal);
 		}
 	}
 	return [];
 }
 
 // 带超时的 fetch 封装
-async function fetchWithTimeout(url: string, options: object): Promise<any> {
+async function fetchWithTimeout(url: string, options: object, signal?: AbortSignal): Promise<any> {
 	const controller = new AbortController();
 	const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
+	const onAbort = () => controller.abort();
+	if (signal?.aborted) {
+		controller.abort();
+	} else {
+		signal?.addEventListener('abort', onAbort, { once: true });
+	}
 	try {
 		return await fetch(url, { ...options, signal: controller.signal });
 	} finally {
 		clearTimeout(timer);
+		signal?.removeEventListener('abort', onAbort);
 	}
 }
 
 // 改进的网页内容获取函数，添加随机延迟和超时
-async function fetchPageContent(url: string): Promise<string> {
+async function fetchPageContent(url: string, signal?: AbortSignal): Promise<string> {
 	// 添加随机延迟，避免过快请求
 	const randomDelay = Math.random() * 1000 + 500; // 500-1500ms delay
-	await delay(randomDelay);
+	await delay(randomDelay, signal);
 
 	try {
 		const response = await fetchWithTimeout(url, {
@@ -207,7 +250,7 @@ async function fetchPageContent(url: string): Promise<string> {
 				'User-Agent': 'Mozilla/5.0 (compatible; SearchBot/1.0)',
 				'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
 			}
-		});
+		}, signal);
 
 		if (!response.ok) {
 			throw new Error(`HTTP error! status: ${response.status}`);
@@ -216,6 +259,9 @@ async function fetchPageContent(url: string): Promise<string> {
 		const html = await response.text();
 		return cleanHtml(html);
 	} catch (error) {
+		if (signal?.aborted) {
+			throw error;
+		}
 		console.error(`Error fetching ${url}:`, error);
 		return '';
 	}

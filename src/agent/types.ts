@@ -12,6 +12,7 @@ export interface ToolDefinition {
 
 export interface ToolContext {
 	workspaceRoot: string;
+	signal?: AbortSignal;
 }
 
 export interface ToolCall {
@@ -63,4 +64,5 @@ export interface AgentConfig {
 	model: string;
 	maxTokens: number;
 	keepAlive: string;
+	systemPrompt?: string;
 }

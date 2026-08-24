@@ -4,11 +4,17 @@ import * as path from 'path';
 import { promisify } from 'util';
 import { ToolDefinition, ToolContext } from './types';
 import { edit } from './editTool';
+import { assertRealPathInWorkspace, resolveInWorkspace } from './pathSafety';
 
 const execAsync = promisify(exec);
 const execFileAsync = promisify(execFile);
 
+function getHostShell(): string {
+	return process.platform === 'win32' ? (process.env.ComSpec || 'cmd.exe') : (process.env.SHELL || '/bin/sh');
+}
+
 const MAX_FILE_SIZE = 1024 * 1024; // 1MB
+const MAX_WRITE_SIZE = 1024 * 1024; // 1MB
 const MAX_OUTPUT_LENGTH = 50000;
 const EXCLUDED_DIRS = new Set([
 	'node_modules',
@@ -30,13 +36,24 @@ const DEFAULT_FIND_LIMIT = 1000;
 const DEFAULT_GREP_LIMIT = 100;
 const DEFAULT_BASH_TIMEOUT_MS = 120000;
 
-function resolveInWorkspace(ctx: ToolContext, p: string): string {
-	const abs = path.isAbsolute(p) ? path.normalize(p) : path.resolve(ctx.workspaceRoot, p);
-	const root = path.resolve(ctx.workspaceRoot);
-	if (abs !== root && !abs.startsWith(root + path.sep)) {
-		throw new Error(`Path "${p}" resolves outside the workspace.`);
+function resolveToolPath(ctx: ToolContext, p: string): string {
+	return resolveInWorkspace(ctx.workspaceRoot, p);
+}
+
+function throwIfAborted(ctx: ToolContext): void {
+	if (ctx.signal?.aborted) {
+		throw new Error('Tool execution cancelled.');
 	}
-	return abs;
+}
+
+async function writeFileAtomically(filePath: string, content: string): Promise<void> {
+	const tempPath = `${filePath}.ollama-tmp-${process.pid}-${Date.now()}`;
+	try {
+		await fs.promises.writeFile(tempPath, content, 'utf8');
+		await fs.promises.rename(tempPath, filePath);
+	} finally {
+		await fs.promises.rm(tempPath, { force: true }).catch(() => { /* ignore cleanup errors */ });
+	}
 }
 
 function formatBytes(bytes: number): string {
@@ -52,12 +69,14 @@ function formatBytes(bytes: number): string {
 // ---------- read ----------
 
 async function readFileTool(args: Record<string, unknown>, ctx: ToolContext): Promise<string> {
+	throwIfAborted(ctx);
 	if (!args.path) {
 		return 'Error: "path" is required.';
 	}
 	let filePath: string;
 	try {
-		filePath = resolveInWorkspace(ctx, String(args.path));
+		filePath = resolveToolPath(ctx, String(args.path));
+		await assertRealPathInWorkspace(ctx.workspaceRoot, filePath);
 	} catch (e) {
 		return e instanceof Error ? e.message : String(e);
 	}
@@ -75,7 +94,9 @@ async function readFileTool(args: Record<string, unknown>, ctx: ToolContext): Pr
 		return `"${args.path}" is too large to read (${formatBytes(stat.size)}). Use grep to search it instead.`;
 	}
 
+	throwIfAborted(ctx);
 	const content = await fs.promises.readFile(filePath, 'utf8');
+	throwIfAborted(ctx);
 	const lines = content.split('\n');
 	const totalLines = lines.length;
 
@@ -118,21 +139,30 @@ async function readFileTool(args: Record<string, unknown>, ctx: ToolContext): Pr
 // ---------- write ----------
 
 async function writeFileTool(args: Record<string, unknown>, ctx: ToolContext): Promise<string> {
+	throwIfAborted(ctx);
 	if (!args.path) {
 		return 'Error: "path" is required.';
 	}
 	if (typeof args.content !== 'string') {
 		return 'Error: "content" is required.';
 	}
+	const contentSize = Buffer.byteLength(args.content, 'utf8');
+	if (contentSize > MAX_WRITE_SIZE) {
+		return `Error: content is too large to write (${formatBytes(contentSize)}; maximum ${formatBytes(MAX_WRITE_SIZE)}).`;
+	}
 	let filePath: string;
 	try {
-		filePath = resolveInWorkspace(ctx, String(args.path));
+		filePath = resolveToolPath(ctx, String(args.path));
 	} catch (e) {
 		return e instanceof Error ? e.message : String(e);
 	}
 
+	throwIfAborted(ctx);
 	await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
-	await fs.promises.writeFile(filePath, args.content, 'utf8');
+	await assertRealPathInWorkspace(ctx.workspaceRoot, filePath, true);
+	throwIfAborted(ctx);
+	await writeFileAtomically(filePath, args.content);
+	throwIfAborted(ctx);
 
 	return `Wrote ${path.relative(ctx.workspaceRoot, filePath)} (${formatBytes(Buffer.byteLength(args.content))}).`;
 }
@@ -140,19 +170,23 @@ async function writeFileTool(args: Record<string, unknown>, ctx: ToolContext): P
 // ---------- bash ----------
 
 async function bash(args: Record<string, unknown>, ctx: ToolContext): Promise<string> {
+	throwIfAborted(ctx);
 	const command = String(args.command ?? '').trim();
 	if (!command) {
 		return 'Error: "command" is required.';
 	}
 
 	const timeoutSec = Number(args.timeout);
-	const timeoutMs = Number.isFinite(timeoutSec) && timeoutSec > 0 ? timeoutSec * 1000 : DEFAULT_BASH_TIMEOUT_MS;
+	const requestedTimeoutMs = Number.isFinite(timeoutSec) && timeoutSec > 0 ? timeoutSec * 1000 : DEFAULT_BASH_TIMEOUT_MS;
+	const timeoutMs = Math.min(requestedTimeoutMs, DEFAULT_BASH_TIMEOUT_MS);
 
 	try {
 		const { stdout, stderr } = await execAsync(command, {
 			cwd: ctx.workspaceRoot,
+			shell: getHostShell(),
 			timeout: timeoutMs,
-			maxBuffer: 8 * 1024 * 1024
+			maxBuffer: 8 * 1024 * 1024,
+			signal: ctx.signal
 		});
 
 		let output = stdout.trim();
@@ -226,12 +260,14 @@ async function runRipgrep(
 	const { stdout } = await execFileAsync('rg', rgArgs, {
 		cwd,
 		timeout: 30000,
-		maxBuffer: 8 * 1024 * 1024
+		maxBuffer: 8 * 1024 * 1024,
+		signal: ctx.signal
 	});
 
 	const results: string[] = [];
 	let realMatchCount = 0;
 	for (const line of stdout.split('\n')) {
+		throwIfAborted(ctx);
 		if (!line.trim()) {
 			continue;
 		}
@@ -264,7 +300,7 @@ async function runRipgrep(
 	return `Found ${realMatchCount} match(es) for "${pattern}"${suffix}:\n${results.join('\n')}`;
 }
 
-async function runGrepFallback(
+export async function runNodeGrep(
 	pattern: string,
 	glob: string,
 	ignoreCase: boolean,
@@ -274,51 +310,74 @@ async function runGrepFallback(
 	cwd: string,
 	ctx: ToolContext
 ): Promise<string> {
-	// ripgrep 不可用时的降级:用 POSIX grep(自带于 macOS / 大多数 Linux)
-	const grepArgs: string[] = ['-rn', '-E', '--color=never'];
-	if (ignoreCase) {
-		grepArgs.push('-i');
-	}
-	if (literal) {
-		grepArgs.push('-F');
-	}
-	if (Number.isFinite(context) && context > 0) {
-		grepArgs.push('-C', String(Math.floor(context)));
-	}
-	if (glob) {
-		grepArgs.push(`--include=${glob}`);
-	}
-	for (const dir of EXCLUDED_DIRS) {
-		grepArgs.push(`--exclude-dir=${dir}`);
-	}
-	grepArgs.push('--', pattern);
-
-	const { stdout } = await execFileAsync('grep', grepArgs, {
-		cwd,
-		timeout: 30000,
-		maxBuffer: 8 * 1024 * 1024
-	});
-
+	const regex = literal ? null : new RegExp(pattern, ignoreCase ? 'i' : undefined);
+	const needle = ignoreCase ? pattern.toLocaleLowerCase() : pattern;
 	const results: string[] = [];
-	for (const line of stdout.split('\n')) {
-		if (!line.trim() || results.length >= limit) {
-			continue;
-		}
-		// grep -n 输出: file:line:content(-C 时的 "--" 分隔符不会匹配,自然跳过)
-		const m = line.match(/^(.+?):(\d+):(.*)$/);
-		if (!m) {
-			continue;
-		}
-		const [, file, ln, text] = m;
-		const rel = path.relative(ctx.workspaceRoot, path.resolve(cwd, file));
-		results.push(`${rel}:${ln}: ${text.trim()}`);
-	}
+	let matchCount = 0;
 
+	const visit = async (dir: string, depth: number): Promise<void> => {
+		throwIfAborted(ctx);
+		if (results.length >= limit || depth > 20) {
+			return;
+		}
+		let entries: fs.Dirent[];
+		try {
+			entries = await fs.promises.readdir(dir, { withFileTypes: true });
+		} catch {
+			return;
+		}
+		for (const entry of entries) {
+			throwIfAborted(ctx);
+			if (results.length >= limit) {
+				return;
+			}
+			if (entry.isDirectory()) {
+				if (EXCLUDED_DIRS.has(entry.name) || entry.name.startsWith('.')) {
+					continue;
+				}
+				await visit(path.join(dir, entry.name), depth + 1);
+				continue;
+			}
+			if (!entry.isFile() || !matchesGlob(path.relative(ctx.workspaceRoot, path.join(dir, entry.name)).split(path.sep).join('/'), glob || '**/*')) {
+				continue;
+			}
+			const filePath = path.join(dir, entry.name);
+			let stat: fs.Stats;
+			try {
+				stat = await fs.promises.stat(filePath);
+				if (stat.size > MAX_FILE_SIZE) {
+					continue;
+				}
+				const content = await fs.promises.readFile(filePath, 'utf8');
+				const lines = content.split('\n');
+				for (let index = 0; index < lines.length; index++) {
+					throwIfAborted(ctx);
+					const line = lines[index].replace(/\r$/, '');
+					const haystack = ignoreCase ? line.toLocaleLowerCase() : line;
+					const matched = regex ? regex.test(line) : haystack.includes(needle);
+					if (!matched) {
+						continue;
+					}
+					matchCount++;
+					const start = Math.max(0, index - Math.max(0, Math.floor(context)));
+					const end = Math.min(lines.length - 1, index + Math.max(0, Math.floor(context)));
+					const rel = path.relative(ctx.workspaceRoot, filePath).split(path.sep).join('/');
+					for (let lineIndex = start; lineIndex <= end && results.length < limit; lineIndex++) {
+						results.push(`${rel}:${lineIndex + 1}: ${lines[lineIndex].replace(/\r$/, '').slice(0, 200).trim()}`);
+					}
+				}
+			} catch {
+				continue;
+			}
+		}
+	};
+
+	await visit(cwd, 0);
 	if (results.length === 0) {
 		return `No matches found for "${pattern}".`;
 	}
 	const suffix = glob ? ` (glob: ${glob})` : '';
-	return `Found ${results.length} match(es) for "${pattern}"${suffix}:\n${results.join('\n')}`;
+	return `Found ${matchCount} match(es) for "${pattern}"${suffix}:\n${results.join('\n')}`;
 }
 
 async function grep(args: Record<string, unknown>, ctx: ToolContext): Promise<string> {
@@ -331,16 +390,18 @@ async function grep(args: Record<string, unknown>, ctx: ToolContext): Promise<st
 	const literal = Boolean(args.literal);
 	const context = Number(args.context);
 	const limit = Math.min(Number(args.limit) || DEFAULT_GREP_LIMIT, 1000);
-	const cwd = args.path ? resolveInWorkspace(ctx, String(args.path)) : path.resolve(ctx.workspaceRoot);
+	const cwd = args.path ? resolveToolPath(ctx, String(args.path)) : path.resolve(ctx.workspaceRoot);
+	await assertRealPathInWorkspace(ctx.workspaceRoot, cwd);
+	throwIfAborted(ctx);
 
-	// 优先用 ripgrep;rg 未安装 (ENOENT) 时降级到 POSIX grep,避免 agent 卡住要用户装工具。
+	// 优先用 ripgrep;rg 未安装 (ENOENT) 时降级到 Node 原生搜索,避免 BSD/GNU/Windows grep 参数差异。
 	try {
 		return await runRipgrep(pattern, glob, ignoreCase, literal, context, limit, cwd, ctx);
 	} catch (e) {
 		const err = e as { code?: string | number; message?: string };
 		if (err.code === 'ENOENT') {
 			try {
-				return await runGrepFallback(pattern, glob, ignoreCase, literal, context, limit, cwd, ctx);
+				return await runNodeGrep(pattern, glob, ignoreCase, literal, context, limit, cwd, ctx);
 			} catch (e2) {
 				const err2 = e2 as { code?: string | number; message?: string };
 				if (err2.code === 1) {
@@ -362,21 +423,31 @@ async function grep(args: Record<string, unknown>, ctx: ToolContext): Promise<st
 // ---------- find ----------
 
 function matchesGlob(name: string, pattern: string): boolean {
-	// 将 glob 转成正则(支持 * 与 **)
-	const re = new RegExp(
-		'^' +
-			pattern
-				.split('/')
-				.map(seg => {
-					if (seg === '**') {
-						return '(?:.*/)?';
-					}
-					return seg.replace(/\*\*/g, '.*').replace(/\*/g, '[^/]*').replace(/\?/g, '[^/]').replace(/[.+^${}()|[\]\\]/g, '\\$&');
-				})
-				.join('/') +
-			'$'
-	);
-	return re.test(name);
+	const normalizedPattern = pattern.replace(/\\/g, '/');
+	let source = '^';
+	for (let i = 0; i < normalizedPattern.length; i++) {
+		const char = normalizedPattern[i];
+		if (char === '*') {
+			if (normalizedPattern[i + 1] === '*') {
+				i++;
+				if (normalizedPattern[i + 1] === '/') {
+					i++;
+					source += '(?:.*/)?';
+				} else {
+					source += '.*';
+				}
+			} else {
+				source += '[^/]*';
+			}
+		} else if (char === '?') {
+			source += '[^/]';
+		} else if ('\\.+^${}()|[]'.includes(char)) {
+			source += `\\${char}`;
+		} else {
+			source += char;
+		}
+	}
+	return new RegExp(`${source}$`).test(name.replace(/\\/g, '/'));
 }
 
 async function findWithFallback(pattern: string, cwd: string, limit: number, ctx: ToolContext): Promise<string[]> {
@@ -397,6 +468,7 @@ async function findWithFallback(pattern: string, cwd: string, limit: number, ctx
 
 	const results: string[] = [];
 	const walk = async (dir: string, depth: number): Promise<void> => {
+		throwIfAborted(ctx);
 		if (results.length >= limit || depth > 20) {
 			return;
 		}
@@ -433,7 +505,7 @@ async function find(args: Record<string, unknown>, ctx: ToolContext): Promise<st
 		return 'Error: "pattern" (glob) is required.';
 	}
 	const limit = Math.min(Number(args.limit) || DEFAULT_FIND_LIMIT, 10000);
-	const cwd = args.path ? resolveInWorkspace(ctx, String(args.path)) : path.resolve(ctx.workspaceRoot);
+	const cwd = args.path ? resolveToolPath(ctx, String(args.path)) : path.resolve(ctx.workspaceRoot);
 
 	const results = await findWithFallback(pattern, cwd, limit, ctx);
 	if (results.length === 0) {
@@ -447,7 +519,9 @@ async function find(args: Record<string, unknown>, ctx: ToolContext): Promise<st
 
 async function ls(args: Record<string, unknown>, ctx: ToolContext): Promise<string> {
 	const limit = Math.min(Number(args.limit) || DEFAULT_LS_LIMIT, 10000);
-	const dir = args.path ? resolveInWorkspace(ctx, String(args.path)) : path.resolve(ctx.workspaceRoot);
+	const dir = args.path ? resolveToolPath(ctx, String(args.path)) : path.resolve(ctx.workspaceRoot);
+	await assertRealPathInWorkspace(ctx.workspaceRoot, dir);
+	throwIfAborted(ctx);
 
 	let stat: fs.Stats;
 	try {
@@ -500,7 +574,7 @@ export function createAgentTools(): ToolDefinition[] {
 		{
 			name: 'read',
 			description:
-				'Read a text file from the local filesystem. Returns content with line numbers and truncates large files. Use offset/limit to page through long files. Read a file before editing it.',
+				'Read a text file from the local filesystem. Returns a path and line-range header followed by content, and truncates large files. Use offset/limit to page through long files. Read a file before editing it.',
 			parameters: {
 				type: 'object',
 				properties: {
@@ -524,7 +598,7 @@ export function createAgentTools(): ToolDefinition[] {
 				},
 				required: ['path', 'content']
 			},
-			requiresConfirmation: false,
+			requiresConfirmation: true,
 			execute: writeFileTool
 		},
 		{
@@ -550,7 +624,7 @@ export function createAgentTools(): ToolDefinition[] {
 				},
 				required: ['path', 'edits']
 			},
-			requiresConfirmation: false,
+			requiresConfirmation: true,
 			execute: edit
 		},
 		{
@@ -614,7 +688,7 @@ export function createAgentTools(): ToolDefinition[] {
 				},
 				required: ['command']
 			},
-			requiresConfirmation: false,
+			requiresConfirmation: true,
 			execute: bash
 		}
 	];

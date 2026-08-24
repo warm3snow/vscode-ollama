@@ -115,7 +115,8 @@
     "compile": "node esbuild.js --production && node scripts/verify-webview.js",
     "verify:webview": "node scripts/verify-webview.js",
     "watch": "node esbuild.js --watch",
-    "pretest": "npm run compile && npm run lint",
+    "pretest": "npm run compile && npm run lint && npx tsc -p tsconfig.json",
+    "test": "node --test test/agent.test.js",
     "lint": "eslint \"src/**/*.ts\"",
     "typecheck": "tsc -p ./ --noEmit"
   },

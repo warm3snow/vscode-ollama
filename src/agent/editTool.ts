@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { ToolContext } from './types';
+import { assertRealPathInWorkspace, resolveInWorkspace } from './pathSafety';
 
 const MAX_FILE_SIZE = 1024 * 1024; // 1MB
 const MAX_DIFF_LINES = 2000; // 超过此规模跳过完整 diff,避免 LCS 内存爆炸
@@ -31,19 +32,23 @@ function normalizePlain(s: string): string {
 function normalizeWithMap(input: string): Normalized {
 	const text: string[] = [];
 	const srcIndex: number[] = [];
-	const codePoints = Array.from(input);
-	for (let i = 0; i < codePoints.length; i++) {
-		let ch = codePoints[i];
-		if (ch === '\r') {
+	for (let offset = 0; offset < input.length;) {
+		const codePoint = input.codePointAt(offset);
+		if (codePoint === undefined) {
+			break;
+		}
+		const original = String.fromCodePoint(codePoint);
+		offset += original.length;
+		if (original === '\r') {
 			continue; // CRLF -> LF:丢弃 \r,后面的 \n 会映射到其原始位置
 		}
-		ch = normalizePlain(ch);
-		for (const c of Array.from(ch)) {
+		const normalized = normalizePlain(original);
+		for (const c of Array.from(normalized)) {
 			text.push(c);
-			srcIndex.push(i);
+			srcIndex.push(offset - original.length);
 		}
 	}
-	srcIndex.push(codePoints.length);
+	srcIndex.push(input.length);
 	return { text: text.join(''), srcIndex };
 }
 
@@ -55,17 +60,25 @@ interface LocatedEdit {
 	newText: string;
 }
 
-function locateEdit(content: string, norm: Normalized, oldText: string): { start: number; end: number } | null {
+type LocateResult = { start: number; end: number } | { error: string };
+
+function locateEdit(content: string, norm: Normalized, oldText: string): LocateResult {
 	// 精确匹配优先(模型通常会原样复制读到的文本)
 	const exact = content.indexOf(oldText);
 	if (exact >= 0) {
+		if (content.indexOf(oldText, exact + oldText.length) >= 0) {
+			return { error: '"oldText" occurs multiple times; include more surrounding context.' };
+		}
 		return { start: exact, end: exact + oldText.length };
 	}
 	// 归一化模糊匹配,并映射回原始偏移
 	const oldNorm = normalizePlain(oldText);
 	const idx = norm.text.indexOf(oldNorm);
 	if (idx < 0) {
-		return null;
+		return { error: '"oldText" not found. Read the file first to get the exact text.' };
+	}
+	if (norm.text.indexOf(oldNorm, idx + oldNorm.length) >= 0) {
+		return { error: 'normalized "oldText" occurs multiple times; include more surrounding context.' };
 	}
 	return { start: norm.srcIndex[idx], end: norm.srcIndex[idx + oldNorm.length] };
 }
@@ -85,8 +98,8 @@ export function applyEdits(
 			continue;
 		}
 		const match = locateEdit(content, norm, edit.oldText);
-		if (!match) {
-			errors.push(`edit #${i + 1}: "oldText" not found. Read the file first to get the exact text.`);
+		if ('error' in match) {
+			errors.push(`edit #${i + 1}: ${match.error}`);
 			continue;
 		}
 		located.push({
@@ -255,6 +268,22 @@ export function createUnifiedDiff(oldText: string, newText: string, fileLabel: s
 
 // ---------- edit 工具 ----------
 
+function throwIfAborted(ctx: ToolContext): void {
+	if (ctx.signal?.aborted) {
+		throw new Error('Edit cancelled.');
+	}
+}
+
+async function writeFileAtomically(filePath: string, content: string): Promise<void> {
+	const tempPath = `${filePath}.ollama-tmp-${process.pid}-${Date.now()}`;
+	try {
+		await fs.promises.writeFile(tempPath, content, 'utf8');
+		await fs.promises.rename(tempPath, filePath);
+	} finally {
+		await fs.promises.rm(tempPath, { force: true }).catch(() => { /* ignore cleanup errors */ });
+	}
+}
+
 function parseEdits(raw: unknown): EditOperation[] | null {
 	if (!Array.isArray(raw)) {
 		return null;
@@ -276,6 +305,7 @@ function parseEdits(raw: unknown): EditOperation[] | null {
 }
 
 export async function edit(args: Record<string, unknown>, ctx: ToolContext): Promise<string> {
+	throwIfAborted(ctx);
 	if (!args.path) {
 		return 'Error: "path" is required.';
 	}
@@ -284,16 +314,17 @@ export async function edit(args: Record<string, unknown>, ctx: ToolContext): Pro
 		return 'Error: "edits" must be a non-empty array of {oldText, newText}.';
 	}
 
-	const filePath = path.isAbsolute(String(args.path))
-		? path.normalize(String(args.path))
-		: path.resolve(ctx.workspaceRoot, String(args.path));
-	const root = path.resolve(ctx.workspaceRoot);
-	if (filePath !== root && !filePath.startsWith(root + path.sep)) {
-		return `Error: path "${args.path}" resolves outside the workspace.`;
+	let filePath: string;
+	try {
+		filePath = resolveInWorkspace(ctx.workspaceRoot, String(args.path));
+		await assertRealPathInWorkspace(ctx.workspaceRoot, filePath);
+	} catch (e) {
+		return e instanceof Error ? e.message : String(e);
 	}
 
 	let content: string;
 	try {
+		throwIfAborted(ctx);
 		const stat = await fs.promises.stat(filePath);
 		if (!stat.isFile()) {
 			return `"${args.path}" is not a file.`;
@@ -302,6 +333,7 @@ export async function edit(args: Record<string, unknown>, ctx: ToolContext): Pro
 			return `"${args.path}" is too large to edit (${Math.round(stat.size / 1024)} KB).`;
 		}
 		content = await fs.promises.readFile(filePath, 'utf8');
+		throwIfAborted(ctx);
 	} catch (e) {
 		return `Error reading "${args.path}": ${e instanceof Error ? e.message : String(e)}`;
 	}
@@ -311,7 +343,9 @@ export async function edit(args: Record<string, unknown>, ctx: ToolContext): Pro
 		return `Edit failed for "${path.relative(ctx.workspaceRoot, filePath)}":\n- ${errors.join('\n- ')}`;
 	}
 
-	await fs.promises.writeFile(filePath, updated, 'utf8');
+	throwIfAborted(ctx);
+	await writeFileAtomically(filePath, updated);
+	throwIfAborted(ctx);
 
 	const rel = path.relative(ctx.workspaceRoot, filePath);
 	const diff = createUnifiedDiff(content, updated, rel);

@@ -6,9 +6,9 @@ import { getSettingsWebviewContent } from './webview/settingsWebview';
 import { OllamaModelsResponse } from './types';
 import { getChatWebviewContent } from './webview/chatWebview';
 import { searchWeb } from './webSearch';
-import { runAgentLoop, isContinuePrompt } from './agent/agentLoop';
+import { runAgentLoop, sanitizeAssistantContent } from './agent/agentLoop';
 import { createAgentTools } from './agent/tools';
-import { AgentCallbacks, AgentConfig, ConfirmRequest, OllamaMessage } from './agent/types';
+import { AgentCallbacks, AgentConfig, ConfirmRequest, OllamaMessage, ToolContext } from './agent/types';
 import { AgentSkill, loadSkillsFromDirectory } from './agent/skills';
 
 interface OllamaConfig {
@@ -185,6 +185,7 @@ function manageMessageHistory(messages: ChatMessage[], maxTokens: number): ChatM
 
 let currentReader: ReadableStreamDefaultReader<Uint8Array> | null = null;
 let activeConversationId: string | null = null;
+let activeAgentController: AbortController | null = null;
 
 /**
  * 向 Ollama 发起流式聊天请求并把增量内容转发给 webview。
@@ -294,7 +295,7 @@ async function streamChatResponse(
 			handleLine(buffer.trim());
 		}
 		// 流正常结束:触发完成回调并通知 webview
-		onComplete?.(fullContent);
+		onComplete?.(sanitizeAssistantContent(fullContent));
 		fullContent = '';
 		postStream('', true);
 	} catch (error) {
@@ -334,7 +335,8 @@ export function activate(context: vscode.ExtensionContext) {
 		userContent: string,
 		conversationId: string,
 		planFirst: boolean,
-		extraSystemMessages?: OllamaMessage[]
+		extraSystemMessages?: OllamaMessage[],
+		signal?: AbortSignal
 	): Promise<void> {
 		const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? '';
 		if (!workspaceRoot) {
@@ -380,7 +382,10 @@ export function activate(context: vscode.ExtensionContext) {
 					required: ['query']
 				},
 				requiresConfirmation: false,
-				execute: async (args: Record<string, unknown>) => {
+				execute: async (args: Record<string, unknown>, toolContext: ToolContext) => {
+					if (toolContext.signal?.aborted) {
+						return 'Web search cancelled.';
+					}
 					const query = String(args.query ?? '').trim();
 					if (!query) {
 						return 'Error: "query" is required.';
@@ -390,7 +395,8 @@ export function activate(context: vscode.ExtensionContext) {
 						const result = await searchWeb(query, {
 							provider: cfg.provider,
 							cacheTimeoutMinutes: cfg.cacheTimeout,
-							requestsPerMinute: cfg.requestsPerMinute
+							requestsPerMinute: cfg.requestsPerMinute,
+							signal: toolContext.signal
 						});
 						return result.context;
 					} catch (e) {
@@ -417,7 +423,24 @@ export function activate(context: vscode.ExtensionContext) {
 				isFirstChunk = false;
 			},
 			onRequestConfirmation: (request: ConfirmRequest) => new Promise<boolean>(resolve => {
-				pendingConfirmResolver = resolve;
+				let settled = false;
+				let timeout: ReturnType<typeof setTimeout>;
+				const onAbort = () => finish(false);
+				const finish = (approved: boolean) => {
+					if (settled) {
+						return;
+					}
+					settled = true;
+					clearTimeout(timeout);
+					signal?.removeEventListener('abort', onAbort);
+					if (pendingConfirmResolver === finish) {
+						pendingConfirmResolver = null;
+					}
+					resolve(approved);
+				};
+				timeout = setTimeout(() => finish(false), 5 * 60 * 1000);
+				pendingConfirmResolver = finish;
+				signal?.addEventListener('abort', onAbort, { once: true });
 				webviewPanel.webview.postMessage({ command: 'confirmAction', request });
 			}),
 			onCompleted: () => {
@@ -435,11 +458,13 @@ export function activate(context: vscode.ExtensionContext) {
 			baseUrl: config.baseUrl,
 			model: config.model,
 			maxTokens: config.maxTokens,
-			keepAlive: config.keepAlive
+			keepAlive: config.keepAlive,
+			systemPrompt: config.systemPrompt
 		};
 
-		// 检测 "vibe"/"go on" 等继续信号:开启自主执行模式,让 agent 一路推进到任务完成。
-		const autoContinue = isContinuePrompt(userMessage);
+		// Agent 模式默认运行 ReAct loop；“go on”只是继续已有会话的显式提示，
+		// 不能决定当前回合是否允许调用工具。
+		const autoContinue = true;
 
 		const result = await runAgentLoop({
 			config: agentConfig,
@@ -451,7 +476,8 @@ export function activate(context: vscode.ExtensionContext) {
 			skills,
 			planFirst: shouldPlanFirst,
 			extraSystemMessages,
-			autoContinue
+			autoContinue,
+			signal
 		});
 
 		// 把本轮最终 messages 回写,供下一轮保持上下文连续
@@ -642,23 +668,40 @@ export function activate(context: vscode.ExtensionContext) {
 						// Agent 模式(常驻):让模型通过工具调用搜索/理解/修改代码库并执行 git 命令。
 						// web search 已作为工具由 LLM 自主决策,不再在每次请求时自动搜索。
 						if (message.agentMode) {
+							if (activeAgentController) {
+								panel.webview.postMessage({
+									command: 'streamMessage',
+									content: '\n[Agent 正在运行，请先停止当前任务]',
+									done: true,
+									newMessage: false,
+									conversationId: activeConversationId
+								});
+								return;
+							}
 							const conversationId = Date.now().toString();
+							const controller = new AbortController();
+							activeAgentController = controller;
 							activeConversationId = conversationId;
 							try {
 								// plan-first 仅由显式 /plan 前缀触发(在 runAgentChat 内部判断),
 								// 是否进入 plan-first 不再用正则猜测意图,交给 LLM 自主决策。
-								await runAgentChat(panel, currentConfig, message.content, conversationId, false);
+								await runAgentChat(panel, currentConfig, message.content, conversationId, false, undefined, controller.signal);
 							} catch (error) {
-								const errorMessage = error instanceof Error ? error.message : String(error);
-								vscode.window.showErrorMessage(`Agent error: ${errorMessage}`);
-								panel.webview.postMessage({
-									command: 'streamMessage',
-									content: `\n[Agent 错误: ${errorMessage}]`,
-									done: true,
-									newMessage: false,
-									conversationId
-								});
+								if (!controller.signal.aborted) {
+									const errorMessage = error instanceof Error ? error.message : String(error);
+									vscode.window.showErrorMessage(`Agent error: ${errorMessage}`);
+									panel.webview.postMessage({
+										command: 'streamMessage',
+										content: `\n[Agent 错误: ${errorMessage}]`,
+										done: true,
+										newMessage: false,
+										conversationId
+									});
+								}
 							} finally {
+								if (activeAgentController === controller) {
+									activeAgentController = null;
+								}
 								activeConversationId = null;
 							}
 							return;
@@ -721,6 +764,11 @@ export function activate(context: vscode.ExtensionContext) {
 						}
 					}
 				} else if (message.command === 'stopGeneration') {
+					activeAgentController?.abort();
+					if (pendingConfirmResolver) {
+						pendingConfirmResolver(false);
+						pendingConfirmResolver = null;
+					}
 					if (currentReader) {
 						currentReader.cancel().catch(() => { /* ignore */ });
 						currentReader = null;
@@ -777,6 +825,12 @@ export function activate(context: vscode.ExtensionContext) {
 
 		// 当面板关闭时清除引用
 		panel.onDidDispose(() => {
+			activeAgentController?.abort();
+			activeAgentController = null;
+			if (pendingConfirmResolver) {
+				pendingConfirmResolver(false);
+				pendingConfirmResolver = null;
+			}
 			messageHistory = [];
 			agentMessageHistory = [];
 			currentReader = null;
