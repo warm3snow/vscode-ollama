@@ -14,6 +14,22 @@ function copyMarkedToDist() {
 	fs.copyFileSync(src, path.join(destDir, "marked.min.js"));
 }
 
+/** Copy the built-in subagent agents/prompts markdown into dist so the
+ *  subagent extension can discover them at runtime via __dirname. */
+function copySubagentResources() {
+	const dirs = ["agents", "prompts"];
+	for (const dir of dirs) {
+		const srcDir = path.join(__dirname, "src", "pi", "subagent", dir);
+		const destDir = path.join(__dirname, "dist", "subagent", dir);
+		fs.mkdirSync(destDir, { recursive: true });
+		for (const file of fs.readdirSync(srcDir)) {
+			if (file.endsWith(".md")) {
+				fs.copyFileSync(path.join(srcDir, file), path.join(destDir, file));
+			}
+		}
+	}
+}
+
 async function buildExtension() {
 	const ctx = await esbuild.context({
 		entryPoints: ["src/extension.ts"],
@@ -25,7 +41,8 @@ async function buildExtension() {
 		platform: "node",
 		target: "node16",
 		outfile: "dist/extension.js",
-		external: ["vscode"],
+		// pi-coding-agent 是纯 ESM 包且体积较大：作为运行期依赖随扩展分发，不内联进产物。
+		external: ["vscode", "@earendil-works/pi-coding-agent"],
 		logLevel: "silent",
 	});
 
@@ -40,6 +57,7 @@ async function buildExtension() {
 
 async function main() {
 	copyMarkedToDist();
+	copySubagentResources();
 	await buildExtension();
 }
 

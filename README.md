@@ -1,4 +1,4 @@
-# VSCode Ollama Extension
+# VSCode Ollama
 
 <p align="center">
   <img src="resources/logo.png" alt="VSCode Ollama Logo" width="128"/>
@@ -19,152 +19,123 @@
   </a>
 </p>
 
-[English](README.md) | [中文](README_CN.md)
+<p align="center">
+  <a href="README.md">English</a> · <a href="README_CN.md">中文</a>
+</p>
 
-VSCode Ollama is a powerful Visual Studio Code extension that seamlessly integrates Ollama's local LLM capabilities into your development environment.
+Bring the power of [Ollama](https://ollama.com) into VS Code — run local LLMs, chat, and let an autonomous coding agent read and modify your workspace, all without leaving your editor.
 
 ## ✨ Features
 
-- 🤖 **Local LLM Support**
-  - Local model execution based on Ollama
-  - Multiple model switching support
-  - Low-latency responses
+| | |
+|---|---|
+| 🤖 **Local LLMs** | Run models locally via Ollama with low-latency, private responses and instant model switching. |
+| 💬 **Intelligent Chat** | Streaming output, visualized thought process, and preserved chat history. |
+| 🛠️ **Coding Agent** | An autonomous agent with `read` / `write` / `edit` / `grep` / `find` / `ls` / `bash` tools that reads and modifies your workspace. Risky operations ask for confirmation first. |
+| 🧩 **Subagents** | Delegate work to built-in `codebase-search` / `plan` / `implement` / `review` agents, in serial or parallel. |
+| ⚙️ **Flexible Configuration** | Custom server address, model, token limits, and per-agent tool/confirmation settings. |
 
-- 🔍 **Web Search** 
-  - Real-time web information integration
-  - Smart search results synthesis
-  - Accurate information citation
+## 📸 Screenshots
 
-- 💡 **Intelligent Chat**
-  - Streaming response output
-  - Thought process visualization
-  - Chat history preservation
+<p align="center">
+  <img src="resources/chat.png" alt="Chat Interface" width="800"/>
+  <br/>
+  <em>Chat interface with live agent activity</em>
+</p>
 
-- ⚙️ **Flexible Configuration**
-  - Custom server address
-  - Adjustable performance modes
-  - Model parameter configuration
+<p align="center">
+  <img src="resources/settings.png" alt="Settings Interface" width="800"/>
+  <br/>
+  <em>Settings page</em>
+</p>
 
-## 🚀 Quick Start
+## 🚀 Installation
 
-## 📺 Tutorial
+### 1. Install Ollama
 
-1. **Install Ollama**
-   ```bash
-   # macOS
-   brew install ollama
+```bash
+# macOS
+brew install ollama
 
-   # Linux
-   curl -fsSL https://ollama.com/install.sh | sh
-   ```
+# Linux
+curl -fsSL https://ollama.com/install.sh | sh
+```
 
-2. **Install Extension**
-   - Open Extensions in VS Code
-   - Search for "VSCode Ollama"
-   - Click Install
+Pull a model before use:
 
-3. **Configure Extension**
-   - Open Command Palette (Ctrl+Shift+P / Cmd+Shift+P)
-   - Type "Ollama: Settings"
-   - Configure server address and default model
+```bash
+ollama pull qwen2.5-coder:7b
+```
 
- <p align="center">
-     <img src="resources/settings.png" alt="VSCode Ollama Settings Interface" width="800"/>
-  </p>
+### 2. Install the Extension
 
-4. **Start Using**
-   - Use command "Ollama: Open Chat" to start conversation
-   - Select model in chat interface
-   - Toggle web search
-   - Send message to interact
+Open the Extensions view in VS Code, search for **"VSCode Ollama"**, and click **Install**.
 
-   <p align="center">
-     <img src="resources/chat.png" alt="VSCode Ollama Chat Interface" width="800"/>
-   </p>
+### 3. Configure
 
-## 📝 Usage
+Open the Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`), run **"Ollama: Settings"**, then set your server address and default model.
+
+## 📖 Usage
+
+Open the Command Palette and run **"Ollama: Open Chat"** to start a conversation.
 
 ### Commands
-- `Ollama: Open Chat` - Open chat interface
-- `Ollama: Settings` - Open settings page
 
-### Shortcuts
-- `Shift + Enter` - New line in chat input
-- `Enter` - Send message
+| Command | Description |
+|---|---|
+| `Ollama: Open Chat` | Open the chat interface |
+| `Ollama: Settings` | Open the settings page |
 
-## ❤️ Support & Donation
+### Keyboard Shortcuts
 
-If you find this extension helpful, you can support the developer by:
+| Shortcut | Action |
+|---|---|
+| `Enter` | Send message |
+| `Shift + Enter` | Insert a new line |
 
-<details>
-<summary>💰 Donation Methods</summary>
+### Settings
 
-<p align="center">Support the developer</p>
+| Setting | Default | Description |
+|---|---|---|
+| `vscode-ollama.baseUrl` | `http://127.0.0.1:11434` | Ollama server address |
+| `vscode-ollama.model` | `deepseek-r1:32b` | Default model |
+| `vscode-ollama.maxTokens` | `4096` | Maximum response tokens |
+| `vscode-ollama.keepAlive` | `5 minutes` | Model keep-alive duration |
+| `vscode-ollama.systemPrompt` | — | System prompt for chat conversations |
 
-<table>
-  <tr>
-    <td align="center">
-      <img src="resources/wechat.jpg" alt="WeChat Pay" width="240"/>
-      <br/>
-      WeChat Pay
-    </td>
-    <td align="center">
-      <img src="resources/alipay.jpg" alt="Alipay" width="240"/>
-      <br/>
-      Alipay
-    </td>
-  </tr>
-</table>
+### Coding Agent
 
-### 🪙 Cryptocurrency
+Chat requests run in Agent mode by default — the model decides which files to read, which commands to run, and how to change the code, while the panel shows its thinking, tool calls, and results.
 
-<table>
-  <tr>
-    <td>
-      <b>Bitcoin</b>
-    </td>
-    <td>
-      <b>Native Segwit</b><br/>
-      <code>bc1qskds324wteq5kfmxh63g624htzwd34gky0f0q5</code>
-      <br/><br/>
-      <b>Taproot</b><br/>
-      <code>bc1pk0zud9csztjrkqew54v2nv7g3kq0xc2n80jatkmz9axkve4trfcqp0aksf</code>
-    </td>
-  </tr>
-  <tr>
-    <td>
-      <b>Ethereum</b>
-    </td>
-    <td>
-      <code>0xB0DA3bbC5e9f8C4b4A12d493A72c33dBDf1A9803</code>
-    </td>
-  </tr>
-  <tr>
-    <td>
-      <b>Solana</b>
-    </td>
-    <td>
-      <code>AMvPLymJm4TZZgvrYU7DCVn4uuzh6gfJiHWNK35gmUzd</code>
-    </td>
-  </tr>
-</table>
+The agent supports the `/reset` command to clear the context and drop the current session.
 
-</details>
+The agent can delegate to subagents with an isolated context window:
 
-Your support helps maintain and improve this extension! Thank you! ❤️
-- ⭐ Star the [GitHub repository](https://github.com/warm3snow/vscode-ollama)
-- 📝 Submit issues or feedback
+- `codebase-search` — locate relevant code and return structured findings
+- `plan` — turn context and requirements into a concrete implementation plan
+- `implement` — execute a task with full tool access
+- `review` — review code for quality and security
+
+> ⚠️ Agent mode requires Node ≥ 22.19 (a recent VS Code build). On older builds plain chat still works and Agent mode reports a clear message.
+>
+> Your local model must support tool calling for the agent to actually invoke tools.
+
+## 🤝 Support
+
+If this extension helps you, here are a few ways to show support:
+
+- ⭐ Star the [repository](https://github.com/warm3snow/vscode-ollama)
 - 🚀 Contribute to the codebase
-- 💬 Share with your friends
+- 💬 Share it with your friends
 
-## 📝 Release Notes
+## 📄 Release Notes
 
-See [CHANGELOG.md](CHANGELOG.md) for release notes.
+See [CHANGELOG.md](CHANGELOG.md).
 
-## 📝 License
+## 📄 License
 
-This extension is licensed under the [MIT License](LICENSE).
+Licensed under the [MIT License](LICENSE).
 
-## Star History
+## ⭐ Star History
 
 [![Star History Chart](https://api.star-history.com/svg?repos=warm3snow/vscode-ollama&type=Date)](https://star-history.com/#warm3snow/vscode-ollama&Date)

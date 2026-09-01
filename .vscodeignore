@@ -9,3 +9,5 @@ vsc-extension-quickstart.md
 src/**
 scripts/**
 node_modules/**
+# pi-coding-agent 是运行期依赖（纯 ESM，无法打包进 CJS 产物），需要随扩展分发
+!node_modules/@earendil-works/**

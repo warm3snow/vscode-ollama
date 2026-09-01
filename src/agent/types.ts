@@ -1,46 +1,27 @@
-// Shared types for the coding agent
+// Shared types for the coding agent (Pi SDK integration)
 
-export interface ToolDefinition {
-	name: string;
-	description: string;
-	/** JSON Schema for the tool arguments */
-	parameters: Record<string, unknown>;
-	/** Tools that modify the codebase or execute commands require user confirmation */
-	requiresConfirmation: boolean;
-	execute(args: Record<string, unknown>, ctx: ToolContext): Promise<string>;
-}
-
-export interface ToolContext {
-	workspaceRoot: string;
-	signal?: AbortSignal;
-}
-
-export interface ToolCall {
-	/** OpenAI-compatible tool call id (used to pair tool messages via tool_call_id) */
-	id?: string;
-	index?: number;
-	type?: string;
-	function: {
-		name: string;
-		/** JSON string of the arguments, as produced by the model */
-		arguments: string;
-	};
-}
-
-export interface OllamaMessage {
-	role: string;
-	content: string;
-	tool_calls?: ToolCall[];
-	/** Required on tool messages (OpenAI-compatible API) to pair them with their tool_call */
-	tool_call_id?: string;
+/** 汇总后的 token 用量，用于在 webview 中展示。 */
+export interface AgentUsageInfo {
+	input: number;
+	output: number;
+	total: number;
 }
 
 export interface AgentStatusEvent {
-	type: 'thinking' | 'tool_call' | 'tool_result' | 'done' | 'error';
+	type: 'thinking_start' | 'thinking_delta' | 'thinking_end' | 'tool_call' | 'tool_result' | 'done' | 'error' | 'usage';
+	/** 关联同一次工具调用的 start / end 事件，webview 用来把调用与结果合并成一张卡片。 */
+	toolCallId?: string;
 	toolName?: string;
 	args?: string;
 	result?: string;
+	/** 工具执行是否失败。 */
+	isError?: boolean;
+	/** 工具执行耗时（毫秒），仅在 tool_result 上有。 */
+	duration?: number;
 	message?: string;
+	/** `thinking_delta` 事件里携带的增量文本。 */
+	thinkingDelta?: string;
+	usage?: AgentUsageInfo;
 }
 
 export interface ConfirmRequest {
@@ -50,19 +31,4 @@ export interface ConfirmRequest {
 	toolName: string;
 	description: string;
 	args: string;
-}
-
-export interface AgentCallbacks {
-	onStatus: (event: AgentStatusEvent) => void;
-	onStream: (content: string) => void;
-	onRequestConfirmation: (request: ConfirmRequest) => Promise<boolean>;
-	onCompleted: () => void;
-}
-
-export interface AgentConfig {
-	baseUrl: string;
-	model: string;
-	maxTokens: number;
-	keepAlive: string;
-	systemPrompt?: string;
 }

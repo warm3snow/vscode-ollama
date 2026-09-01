@@ -5,7 +5,6 @@ interface SettingsConfig {
 	model: string;
 	maxTokens: number;
 	keepAlive: string;
-	performanceMode: string;
 	systemPrompt: string;
 }
 
@@ -27,13 +26,11 @@ export function getSettingsWebviewContent(config: SettingsConfig, webview: vscod
 		model: config.model,
 		maxTokens: config.maxTokens,
 		keepAlive: config.keepAlive,
-		performanceMode: config.performanceMode,
 		systemPrompt: config.systemPrompt
 	};
 	const serializedState = JSON.stringify(stateObj).replace(/</g, '\\u003c');
 
 	const keepAliveOptions = ['1 minute', '5 minutes', '10 minutes', '30 minutes'];
-	const performanceModes = ['Base (Default)', 'Performance', 'Low Latency'];
 
 	const escapeAttr = (value: string) =>
 		value.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
@@ -126,6 +123,32 @@ export function getSettingsWebviewContent(config: SettingsConfig, webview: vscod
                 background-color: var(--vscode-inputValidation-errorBackground);
                 border: 1px solid var(--vscode-inputValidation-errorBorder);
             }
+            .setting-advanced {
+                margin-bottom: 16px;
+                border-top: 1px solid var(--vscode-panelSection-border);
+                padding-top: 12px;
+            }
+            .setting-advanced > summary {
+                cursor: pointer;
+                font-size: 13px;
+                font-weight: 500;
+                color: var(--vscode-descriptionForeground);
+                user-select: none;
+                list-style: none;
+                margin-bottom: 8px;
+            }
+            .setting-advanced > summary::-webkit-details-marker {
+                display: none;
+            }
+            .setting-advanced > summary::before {
+                content: '\u25B8';
+                display: inline-block;
+                margin-right: 6px;
+                transition: transform 0.15s ease;
+            }
+            .setting-advanced[open] > summary::before {
+                transform: rotate(90deg);
+            }
         </style>
     </head>
     <body>
@@ -144,7 +167,7 @@ export function getSettingsWebviewContent(config: SettingsConfig, webview: vscod
                 <select id="model" style="flex: 1;">
                     <option value="${escapeAttr(config.model)}">${escapeAttr(config.model)}</option>
                 </select>
-                <button id="refreshModelsBtn" class="test-connection-button">刷新</button>
+                <button id="refreshModelsBtn" class="test-connection-button">Refresh</button>
             </div>
         </div>
 
@@ -163,20 +186,13 @@ export function getSettingsWebviewContent(config: SettingsConfig, webview: vscod
             </select>
         </div>
 
-        <div class="setting-item">
-            <label class="setting-label">Performance Mode</label>
-            <select id="performanceMode">
-                ${performanceModes
-                    .map(value =>
-                        `<option value="${escapeAttr(value)}" ${value === config.performanceMode ? 'selected' : ''}>${escapeAttr(value)}</option>`
-                    ).join('')}
-            </select>
-        </div>
-
-        <div class="setting-item">
-            <label class="setting-label">System Prompt</label>
-            <textarea id="systemPrompt" rows="4" style="width: 100%; padding: 8px; border: 1px solid var(--vscode-input-border); background: var(--vscode-input-background); color: var(--vscode-input-foreground); border-radius: 4px; resize: vertical;">${escapeAttr(config.systemPrompt)}</textarea>
-        </div>
+        <details class="setting-advanced">
+            <summary>Advanced</summary>
+            <div class="setting-item">
+                <label class="setting-label">System Prompt</label>
+                <textarea id="systemPrompt" rows="4" style="width: 100%; padding: 8px; border: 1px solid var(--vscode-input-border); background: var(--vscode-input-background); color: var(--vscode-input-foreground); border-radius: 4px; resize: vertical;">${escapeAttr(config.systemPrompt)}</textarea>
+            </div>
+        </details>
 
         <button id="saveBtn">Save Settings</button>
 
@@ -204,7 +220,6 @@ export function getSettingsWebviewContent(config: SettingsConfig, webview: vscod
                     document.getElementById('model').value = state.model;
                     document.getElementById('maxTokens').value = state.maxTokens;
                     document.getElementById('keepAlive').value = state.keepAlive;
-                    document.getElementById('performanceMode').value = state.performanceMode;
                     document.getElementById('systemPrompt').value = state.systemPrompt;
                 }
                 refreshModels();
@@ -220,8 +235,7 @@ export function getSettingsWebviewContent(config: SettingsConfig, webview: vscod
                     systemPrompt: document.getElementById('systemPrompt').value,
                     model: document.getElementById('model').value,
                     maxTokens: parseInt(document.getElementById('maxTokens').value),
-                    keepAlive: document.getElementById('keepAlive').value,
-                    performanceMode: document.getElementById('performanceMode').value
+                    keepAlive: document.getElementById('keepAlive').value
                 };
 
                 vscode.postMessage({
@@ -233,7 +247,7 @@ export function getSettingsWebviewContent(config: SettingsConfig, webview: vscod
 
                 const notification = document.createElement('div');
                 notification.className = 'save-notification';
-                notification.textContent = '设置已保存';
+                notification.textContent = 'Settings saved';
                 document.body.appendChild(notification);
 
                 setTimeout(() => {
@@ -258,7 +272,7 @@ export function getSettingsWebviewContent(config: SettingsConfig, webview: vscod
                     if (!message.models || message.models.length === 0) {
                         const statusDiv = document.getElementById('connectionStatus');
                         statusDiv.className = 'connection-status error';
-                        statusDiv.textContent = '无法获取模型列表,请检查 Base URL 或确认 Ollama 服务已启动';
+                        statusDiv.textContent = 'Failed to fetch models. Please check the Base URL or confirm Ollama is running.';
                         return;
                     }
 

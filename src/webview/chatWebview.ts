@@ -5,7 +5,6 @@ interface ChatConfig {
 	model: string;
 	maxTokens: number;
 	keepAlive: string;
-	performanceMode: string;
 	systemPrompt: string;
 }
 
@@ -151,6 +150,152 @@ export function getChatWebviewContent(config: ChatConfig, webview: vscode.Webvie
                 white-space: pre-wrap;
                 word-wrap: break-word;
             }
+            /* Agent 工具调用 / 结果块 */
+            .tool-activity {
+                margin: 6px 0;
+                border-radius: 6px;
+                background: var(--vscode-editor-inactiveSelectionBackground);
+                overflow: hidden;
+                border: 1px solid transparent;
+                border-left: 3px solid #888;
+            }
+            .tool-activity.collapsed .tool-activity-body {
+                display: none;
+            }
+            .tool-activity-header {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                padding: 6px 10px;
+                font-size: 12px;
+                color: var(--vscode-foreground);
+                cursor: pointer;
+                user-select: none;
+                min-width: 0;
+            }
+            .tool-activity-header:hover {
+                background: var(--vscode-list-hoverBackground);
+            }
+            .tool-activity-toggle {
+                font-size: 9px;
+                color: var(--vscode-descriptionForeground);
+                width: 10px;
+                display: inline-block;
+                text-align: center;
+                flex-shrink: 0;
+            }
+            .tool-activity-icon {
+                font-size: 12px;
+                line-height: 1;
+                flex-shrink: 0;
+            }
+            .tool-activity-name {
+                font-weight: 600;
+                flex-shrink: 0;
+            }
+            .tool-activity-summary {
+                color: var(--vscode-descriptionForeground);
+                font-size: 11px;
+                flex: 1;
+                min-width: 0;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+                font-family: var(--vscode-editor-font-family);
+            }
+            .tool-activity-status {
+                font-size: 11px;
+                color: var(--vscode-descriptionForeground);
+                flex-shrink: 0;
+                font-variant-numeric: tabular-nums;
+            }
+            .tool-activity-status.error {
+                color: var(--vscode-errorForeground);
+            }
+            .tool-activity-body {
+                border-top: 1px solid var(--vscode-panelSection-border);
+                background: var(--vscode-input-background);
+                max-height: 420px;
+                overflow-y: auto;
+                padding: 8px 10px;
+            }
+            .tool-activity-section {
+                margin-bottom: 10px;
+            }
+            .tool-activity-section:last-child {
+                margin-bottom: 0;
+            }
+            .tool-activity-section-title {
+                font-size: 10px;
+                color: var(--vscode-descriptionForeground);
+                text-transform: uppercase;
+                letter-spacing: 0.05em;
+                margin-bottom: 4px;
+                font-weight: 600;
+            }
+            .tool-activity-args {
+                margin: 0;
+                display: grid;
+                grid-template-columns: max-content 1fr;
+                column-gap: 14px;
+                row-gap: 4px;
+                font-family: var(--vscode-editor-font-family);
+                font-size: 12px;
+            }
+            .tool-activity-args dt {
+                color: var(--vscode-descriptionForeground);
+                white-space: nowrap;
+                font-weight: 500;
+            }
+            .tool-activity-args dd {
+                margin: 0;
+                color: var(--vscode-foreground);
+                word-break: break-word;
+            }
+            .tool-activity-pre {
+                margin: 0;
+                font-family: var(--vscode-editor-font-family);
+                font-size: 12px;
+                line-height: 1.55;
+                white-space: pre-wrap;
+                word-wrap: break-word;
+                color: var(--vscode-foreground);
+                background: transparent;
+            }
+            .tool-activity-pre.error {
+                color: var(--vscode-errorForeground);
+            }
+            .tool-activity-loading {
+                color: var(--vscode-descriptionForeground);
+                font-style: italic;
+            }
+
+            /* Thinking 块：在结构上复用 tool-activity，但用紫色区分，默认展开 */
+            .tool-activity.thinking {
+                border-left-color: #7d56f4;
+                background: rgba(125, 86, 244, 0.07);
+            }
+            .tool-activity.thinking .tool-activity-name {
+                color: #7d56f4;
+            }
+            .tool-activity.thinking .tool-activity-body {
+                max-height: 260px;
+            }
+            .tool-activity.thinking .tool-activity-pre {
+                color: var(--vscode-foreground);
+                font-size: 12.5px;
+                line-height: 1.6;
+                opacity: 0.92;
+            }
+            /* token 用量摘要 */
+            .usage-footer {
+                margin: 6px 0 2px;
+                padding: 0 2px;
+                font-size: 11px;
+                color: var(--vscode-descriptionForeground);
+                font-variant-numeric: tabular-nums;
+                user-select: text;
+            }
             /* 确认对话框 */
             .confirm-dialog {
                 position: fixed;
@@ -227,6 +372,7 @@ export function getChatWebviewContent(config: ChatConfig, webview: vscode.Webvie
             }
             #message-input {
                 flex: 1;
+                box-sizing: border-box;
                 padding: 14px;
                 border: 1px solid var(--vscode-input-border);
                 background: var(--vscode-input-background);
@@ -235,7 +381,6 @@ export function getChatWebviewContent(config: ChatConfig, webview: vscode.Webvie
                 font-size: 15px;
                 transition: opacity 0.3s ease, cursor 0.3s ease, border-color 0.3s ease;
                 resize: none;
-                min-height: 24px;
                 max-height: 200px;
                 outline: none;
                 font-family: var(--vscode-font-family);
@@ -807,6 +952,41 @@ export function getChatWebviewContent(config: ChatConfig, webview: vscode.Webvie
                 color: var(--vscode-textLink-activeForeground);
             }
 
+            .welcome-tips {
+                margin: 14px 0 0 0;
+                padding: 0;
+                list-style: none;
+                color: var(--vscode-foreground);
+                font-size: 0.95em;
+                line-height: 1.7;
+                opacity: 0.9;
+            }
+
+            .welcome-tips li {
+                margin: 0 0 8px 0;
+                padding-left: 18px;
+                position: relative;
+            }
+
+            .welcome-tips li::before {
+                content: '▸';
+                position: absolute;
+                left: 2px;
+                color: var(--vscode-textLink-foreground);
+            }
+
+            .welcome-tips strong {
+                font-weight: 600;
+                color: var(--vscode-textLink-foreground);
+            }
+
+            .welcome-footer {
+                margin: 14px 0 0 0;
+                color: var(--vscode-descriptionForeground);
+                font-size: 0.88em;
+                line-height: 1.6;
+            }
+
             /* 添加CSS变量提取函数 */
             :root {
                 --vscode-textLink-foreground-rgb: 0, 120, 212;
@@ -873,7 +1053,6 @@ export function getChatWebviewContent(config: ChatConfig, webview: vscode.Webvie
                 });
             });
 
-            let webSearchEnabled = true;   // mandatory
             let agentModeEnabled = true;   // mandatory
             let pendingConfirmRequestId = null;
             let isGenerating = false;
@@ -1053,6 +1232,416 @@ export function getChatWebviewContent(config: ChatConfig, webview: vscode.Webvie
                 initAllThinkSections();
             }
 
+            // 不同工具的图标、强调色、摘要字段
+            const TOOL_STYLES = {
+                bash:  { icon: '\u25B7', accent: '#e06c75', label: 'Bash',  summaryField: 'command' },
+                read:  { icon: '\u25A2', accent: '#61afef', label: 'Read',  summaryField: 'path' },
+                write: { icon: '\u25CB', accent: '#c678dd', label: 'Write', summaryField: 'path' },
+                edit:  { icon: '\u270E', accent: '#e5c07b', label: 'Edit',  summaryField: 'path' },
+                grep:  { icon: '\u2315', accent: '#98c379', label: 'Grep',  summaryField: 'pattern' },
+                find:  { icon: '\u2315', accent: '#56b6c2', label: 'Find',  summaryField: 'pattern' },
+                ls:    { icon: '\u2630', accent: '#8a8f97', label: 'List',  summaryField: 'path' }
+            };
+            const DEFAULT_TOOL_STYLE = { icon: '\u2699', accent: '#8a8f97', label: 'Tool', summaryField: '' };
+            const toolCards = new Map();
+
+            function getToolStyle(toolName) {
+                return TOOL_STYLES[toolName] || DEFAULT_TOOL_STYLE;
+            }
+
+            // 从参数 JSON 提取该工具最值得在折叠态显示的字段
+            function summarizeArgs(toolName, argsJson) {
+                if (!argsJson) {
+                    return '';
+                }
+                let parsed;
+                try {
+                    parsed = JSON.parse(argsJson);
+                } catch {
+                    return argsJson.length > 120 ? argsJson.slice(0, 117) + '\u2026' : argsJson;
+                }
+                if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+                    return JSON.stringify(parsed);
+                }
+                const field = getToolStyle(toolName).summaryField;
+                if (field && typeof parsed[field] === 'string' && parsed[field]) {
+                    const value = parsed[field];
+                    return value.length > 100 ? value.slice(0, 97) + '\u2026' : value;
+                }
+                for (const v of Object.values(parsed)) {
+                    if (typeof v === 'string' && v) {
+                        return v.length > 100 ? v.slice(0, 97) + '\u2026' : v;
+                    }
+                }
+                return '';
+            }
+
+            function formatDuration(ms) {
+                if (typeof ms !== 'number' || ms < 0) {
+                    return '';
+                }
+                return ms < 1000 ? ms + ' ms' : (ms / 1000).toFixed(2) + ' s';
+            }
+
+            function getOrCreateGroup() {
+                let group = chatContainer.lastElementChild;
+                if (!group || !group.classList.contains('conversation-group')) {
+                    group = document.createElement('div');
+                    group.className = 'conversation-group';
+                    chatContainer.appendChild(group);
+                }
+                return group;
+            }
+
+            // 创建或获取一次工具调用对应的卡片（按 toolCallId 匹配）。
+            // 首次进入为「运行中」折叠态，args 已经在 body 里准备好。
+            function upsertToolCard(toolCallId, toolName, argsJson) {
+                if (toolCallId && toolCards.has(toolCallId)) {
+                    const existing = toolCards.get(toolCallId);
+                    if (argsJson) {
+                        existing.summary.textContent = summarizeArgs(toolName, argsJson);
+                    }
+                    return existing;
+                }
+
+                const style = getToolStyle(toolName);
+                const block = document.createElement('div');
+                block.className = 'tool-activity collapsed tool-' + (toolName || 'default');
+                block.style.borderLeftColor = style.accent;
+
+                const header = document.createElement('div');
+                header.className = 'tool-activity-header';
+
+                const toggle = document.createElement('span');
+                toggle.className = 'tool-activity-toggle';
+                toggle.textContent = '\u25B8';
+
+                const icon = document.createElement('span');
+                icon.className = 'tool-activity-icon';
+                icon.textContent = style.icon;
+
+                const name = document.createElement('span');
+                name.className = 'tool-activity-name';
+                name.textContent = style.label;
+
+                const summary = document.createElement('span');
+                summary.className = 'tool-activity-summary';
+                summary.textContent = summarizeArgs(toolName, argsJson);
+
+                const status = document.createElement('span');
+                status.className = 'tool-activity-status';
+                status.textContent = 'Running\u2026';
+
+                header.appendChild(toggle);
+                header.appendChild(icon);
+                header.appendChild(name);
+                header.appendChild(summary);
+                header.appendChild(status);
+
+                const body = document.createElement('div');
+                body.className = 'tool-activity-body';
+                body.style.display = 'none';
+
+                const argsSection = document.createElement('div');
+                argsSection.className = 'tool-activity-section';
+                const argsTitle = document.createElement('div');
+                argsTitle.className = 'tool-activity-section-title';
+                argsTitle.textContent = 'Parameters';
+                argsSection.appendChild(argsTitle);
+                argsSection.appendChild(buildToolCallArgsElement(argsJson));
+                body.appendChild(argsSection);
+
+                const resultSection = document.createElement('div');
+                resultSection.className = 'tool-activity-section tool-activity-result';
+                resultSection.style.display = 'none';
+                const resultTitle = document.createElement('div');
+                resultTitle.className = 'tool-activity-section-title';
+                resultTitle.textContent = 'Result';
+                resultSection.appendChild(resultTitle);
+                const loading = document.createElement('pre');
+                loading.className = 'tool-activity-pre tool-activity-loading';
+                loading.textContent = 'Running\u2026';
+                resultSection.appendChild(loading);
+                body.appendChild(resultSection);
+
+                header.onclick = () => {
+                    const collapsed = block.classList.toggle('collapsed');
+                    body.style.display = collapsed ? 'none' : '';
+                    toggle.textContent = collapsed ? '\u25B8' : '\u25BE';
+                };
+
+                block.appendChild(header);
+                block.appendChild(body);
+                getOrCreateGroup().appendChild(block);
+
+                const entry = { block, body, header, status, summary, resultSection };
+                if (toolCallId) {
+                    toolCards.set(toolCallId, entry);
+                }
+                chatContainer.scrollTop = chatContainer.scrollHeight;
+                return entry;
+            }
+
+            // 把工具结果追加到已有的卡片：替换 loading 占位、更新状态文本。
+            function completeToolCard(toolCallId, toolName, result, isError, duration) {
+                const entry = toolCards.get(toolCallId) || upsertToolCard(toolCallId, toolName, '{}');
+                const { status, resultSection } = entry;
+                status.classList.toggle('error', !!isError);
+                const time = formatDuration(duration);
+                if (time) {
+                    status.textContent = (isError ? 'Failed \u00B7 ' : 'Done \u00B7 ') + time;
+                } else {
+                    status.textContent = isError ? 'Failed' : 'Done';
+                }
+
+                const old = resultSection.querySelector('.tool-activity-pre');
+                const pre = document.createElement('pre');
+                pre.className = 'tool-activity-pre';
+                if (isError) {
+                    pre.classList.add('error');
+                }
+                pre.textContent = result ? result : '(No output)';
+                if (old) {
+                    old.replaceWith(pre);
+                } else {
+                    resultSection.appendChild(pre);
+                }
+                resultSection.style.display = '';
+                chatContainer.scrollTop = chatContainer.scrollHeight;
+            }
+
+            // Thinking 块：与 tool-activity 共用结构，但用紫色、默认展开、滚动展示。
+            const THINKING_ICON = '\uD83E\uDDE0'; // 🧠
+            let thinkingCard = null;
+            let thinkingBody = null;
+            let thinkingPre = null;
+            let thinkingCharCount = 0;
+
+            function upsertThinkingCard() {
+                if (thinkingCard) {
+                    // 已经创建过（同一次 agent run 内的第二条 thinking_delta 不会出现，这里是幂等保护）
+                    return;
+                }
+                const block = document.createElement('div');
+                block.className = 'tool-activity thinking';
+                block.style.borderLeftColor = '#7d56f4';
+
+                const header = document.createElement('div');
+                header.className = 'tool-activity-header';
+
+                const toggle = document.createElement('span');
+                toggle.className = 'tool-activity-toggle';
+                toggle.textContent = '\u25BE'; // 默认展开，所以是 ▾
+
+                const icon = document.createElement('span');
+                icon.className = 'tool-activity-icon';
+                icon.textContent = THINKING_ICON;
+
+                const name = document.createElement('span');
+                name.className = 'tool-activity-name';
+                name.textContent = 'Thinking';
+
+                const summary = document.createElement('span');
+                summary.className = 'tool-activity-summary';
+                summary.textContent = 'Model is thinking\u2026';
+
+                const status = document.createElement('span');
+                status.className = 'tool-activity-status';
+                status.textContent = 'Running\u2026';
+
+                header.append(toggle, icon, name, summary, status);
+
+                const body = document.createElement('div');
+                body.className = 'tool-activity-body';
+                body.style.display = '';
+
+                const pre = document.createElement('pre');
+                pre.className = 'tool-activity-pre';
+                body.appendChild(pre);
+
+                header.onclick = () => {
+                    const collapsed = block.classList.toggle('collapsed');
+                    body.style.display = collapsed ? 'none' : '';
+                    toggle.textContent = collapsed ? '\u25B8' : '\u25BE';
+                };
+
+                block.append(header, body);
+                getOrCreateGroup().appendChild(block);
+                chatContainer.scrollTop = chatContainer.scrollHeight;
+
+                thinkingCard = block;
+                thinkingBody = body;
+                thinkingPre = pre;
+                thinkingCharCount = 0;
+            }
+
+            function appendThinkingDelta(delta) {
+                if (!thinkingCard || !thinkingPre) {
+                    // 没有 start 就收到了 delta（防御性）：现补一张
+                    upsertThinkingCard();
+                }
+                thinkingPre.appendChild(document.createTextNode(delta));
+                thinkingCharCount += delta.length;
+                // 自动滚动到最新内容
+                if (thinkingBody) {
+                    thinkingBody.scrollTop = thinkingBody.scrollHeight;
+                }
+                chatContainer.scrollTop = chatContainer.scrollHeight;
+            }
+
+            function endThinkingCard(duration) {
+                if (!thinkingCard) {
+                    return;
+                }
+                const status = thinkingCard.querySelector('.tool-activity-status');
+                const summary = thinkingCard.querySelector('.tool-activity-summary');
+                const time = formatDuration(duration);
+                if (status) {
+                    status.textContent = time ? ('Done \u00B7 ' + time) : 'Done';
+                }
+                if (summary) {
+                    summary.textContent = thinkingCharCount > 0
+                    ? (formatNumber(thinkingCharCount) + ' chars')
+                    : '(No reasoning content)';
+                }
+                chatContainer.scrollTop = chatContainer.scrollHeight;
+                // 清理引用，等待下一次 start
+                thinkingCard = null;
+                thinkingBody = null;
+                thinkingPre = null;
+                thinkingCharCount = 0;
+            }
+
+            // Agent 级别的错误（非工具错误），用一张简洁的红色卡片展示。
+            function appendErrorActivity(message) {
+                const block = document.createElement('div');
+                block.className = 'tool-activity tool-default';
+                block.style.borderLeftColor = '#e06c75';
+
+                const header = document.createElement('div');
+                header.className = 'tool-activity-header';
+                const toggle = document.createElement('span');
+                toggle.className = 'tool-activity-toggle';
+                toggle.textContent = '\u25B8';
+                const icon = document.createElement('span');
+                icon.className = 'tool-activity-icon';
+                icon.textContent = '\u26A0';
+                const name = document.createElement('span');
+                name.className = 'tool-activity-name';
+                name.textContent = 'Agent';
+                const summary = document.createElement('span');
+                summary.className = 'tool-activity-summary';
+                summary.textContent = 'Run error';
+                const status = document.createElement('span');
+                status.className = 'tool-activity-status error';
+                status.textContent = 'Failed';
+                header.append(toggle, icon, name, summary, status);
+
+                const body = document.createElement('div');
+                body.className = 'tool-activity-body';
+                body.style.display = 'none';
+                const pre = document.createElement('pre');
+                pre.className = 'tool-activity-pre error';
+                pre.textContent = message || '';
+                body.appendChild(pre);
+
+                header.onclick = () => {
+                    const collapsed = block.classList.toggle('collapsed');
+                    body.style.display = collapsed ? 'none' : '';
+                    toggle.textContent = collapsed ? '\u25B8' : '\u25BE';
+                };
+
+                block.append(header, body);
+                getOrCreateGroup().appendChild(block);
+                chatContainer.scrollTop = chatContainer.scrollHeight;
+            }
+
+            // 把工具调用的参数 JSON 渲染成对齐的列表；如果不是 JSON 则原样显示。
+            function buildToolCallArgsElement(rawDetail) {
+                const argsRoot = document.createElement('div');
+                argsRoot.className = 'tool-activity-args-root';
+                const text = (rawDetail || '').trim();
+                if (!text) {
+                    argsRoot.textContent = '(No parameters)';
+                    return argsRoot;
+                }
+                let parsed;
+                try {
+                    parsed = JSON.parse(text);
+                } catch {
+                    const pre = document.createElement('pre');
+                    pre.className = 'tool-activity-pre';
+                    pre.textContent = rawDetail;
+                    argsRoot.appendChild(pre);
+                    return argsRoot;
+                }
+                if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+                    const pre = document.createElement('pre');
+                    pre.className = 'tool-activity-pre';
+                    pre.textContent = JSON.stringify(parsed, null, 2);
+                    argsRoot.appendChild(pre);
+                    return argsRoot;
+                }
+                const dl = document.createElement('dl');
+                dl.className = 'tool-activity-args';
+                for (const [key, value] of Object.entries(parsed)) {
+                    const dt = document.createElement('dt');
+                    dt.textContent = key;
+                    const dd = document.createElement('dd');
+                    dd.textContent = formatToolArgValue(value);
+                    dl.appendChild(dt);
+                    dl.appendChild(dd);
+                }
+                argsRoot.appendChild(dl);
+                return argsRoot;
+            }
+
+            function formatToolArgValue(value) {
+                if (value === null) {
+                    return 'null';
+                }
+                if (value === undefined) {
+                    return '';
+                }
+                const t = typeof value;
+                if (t === 'string') {
+                    return value;
+                }
+                if (t === 'number' || t === 'boolean' || t === 'bigint') {
+                    return String(value);
+                }
+                try {
+                    return JSON.stringify(value);
+                } catch {
+                    return String(value);
+                }
+            }
+
+            // 在对话流末尾追加一行 token 用量摘要。
+            function appendUsageFooter(usage) {
+                if (!usage || typeof usage.total !== 'number') {
+                    return;
+                }
+                let group = chatContainer.lastElementChild;
+                if (!group || !group.classList.contains('conversation-group')) {
+                    group = document.createElement('div');
+                    group.className = 'conversation-group';
+                    chatContainer.appendChild(group);
+                }
+                const footer = document.createElement('div');
+                footer.className = 'usage-footer';
+                footer.textContent = 'Token usage · in ' + formatNumber(usage.input)
+                    + ' · out ' + formatNumber(usage.output)
+                    + ' · total ' + formatNumber(usage.total);
+                group.appendChild(footer);
+                chatContainer.scrollTop = chatContainer.scrollHeight;
+            }
+
+            function formatNumber(n) {
+                const num = typeof n === 'number' ? n : 0;
+                return num.toLocaleString('en-US');
+            }
+
             // Initialize when DOM is ready
             document.addEventListener('DOMContentLoaded', () => {
                 chatContainer = document.getElementById('chat-container');
@@ -1103,7 +1692,6 @@ export function getChatWebviewContent(config: ChatConfig, webview: vscode.Webvie
                 vscode.postMessage({
                     command: 'sendMessage',
                     content,
-                    webSearch: webSearchEnabled,
                     agentMode: agentModeEnabled,
                     resetContext: false
                 });
@@ -1135,30 +1723,38 @@ export function getChatWebviewContent(config: ChatConfig, webview: vscode.Webvie
             });
 
             // 清除对话的处理逻辑
-            clearChatButton.onclick = () => {
-                const welcomeMessage = chatContainer.querySelector('.welcome-message');
+            // 清空聊天视图并恢复欢迎卡片，同时重置所有前端会话状态。
+            // 供「Clear Chat」按钮与 /reset 命令共用。
+            function resetChatView() {
                 chatContainer.innerHTML = '';
+                chatContainer.appendChild(createWelcomeMessage());
 
-                if (welcomeMessage) {
-                    chatContainer.appendChild(welcomeMessage.cloneNode(true));
-                } else {
-                    const welcomeDiv = document.createElement('div');
-                    welcomeDiv.className = 'message assistant-message welcome-message';
-                    welcomeDiv.innerHTML = [
-                        '<div class="welcome-content">',
-                        '  <h2 class="welcome-title">',
-                        '    👋 Welcome to VSCode Ollama!',
-                        '  </h2>',
-                        '  <p class="welcome-text">',
-                        '    <a href="https://github.com/warm3snow/vscode-ollama" class="welcome-link">[vscode-ollama]</a> is a VS Code extension based on local Ollama service, supporting model configuration, web search, and more. Star the GitHub repo to support ongoing development!',
-                        '    <br><br>',
-                        '    GitHub: <a href="https://github.com/warm3snow/vscode-ollama" class="welcome-link">https://github.com/warm3snow/vscode-ollama</a>',
-                        '  </p>',
-                        '</div>'
-                    ].join('');
-                    chatContainer.appendChild(welcomeDiv);
+                // 重置 thinking / tool 卡片状态
+                thinkingCard = null;
+                thinkingBody = null;
+                thinkingPre = null;
+                thinkingCharCount = 0;
+                toolCards.clear();
+
+                // 重置会话与确认状态
+                currentConversationId = null;
+                pendingConfirmRequestId = null;
+                const confirmDialog = document.getElementById('confirm-dialog');
+                if (confirmDialog) {
+                    confirmDialog.style.display = 'none';
                 }
+                isGenerating = false;
+                updateSendButton(false);
+            }
 
+            clearChatButton.onclick = () => {
+                resetChatView();
+
+                // 通知扩展端清理后端会话上下文:
+                // - 普通对话历史 (messageHistory)
+                // - Agent 会话上下文 (piRunner 持有的 Pi session)
+                // 仅仅清空前端 UI 不够,否则下次 sendMessage 模型仍能"记住"旧内容。
+                vscode.postMessage({ command: 'clearChat' });
                 vscode.setState({ messages: [] });
                 menu.classList.remove('show');
             };
@@ -1179,7 +1775,7 @@ export function getChatWebviewContent(config: ChatConfig, webview: vscode.Webvie
                         const resetNotification = document.createElement('div');
                         resetNotification.className = 'message assistant-message';
                         const modelName = currentModelName || 'Assistant';
-                        resetNotification.innerHTML = '<div class="message-prefix">' + modelName + '</div><div class="message-content markdown-content"><p>对话上下文已重置。</p></div>';
+                        resetNotification.innerHTML = '<div class="message-prefix">' + modelName + '</div><div class="message-content markdown-content"><p>Conversation context has been reset.</p></div>';
 
                         newGroup.appendChild(resetNotification);
                         chatContainer.appendChild(newGroup);
@@ -1306,9 +1902,12 @@ export function getChatWebviewContent(config: ChatConfig, webview: vscode.Webvie
                 const input = e.target.value;
                 updateCommandSuggestions(input);
 
-                // 自动调整高度
+                // 自动调整高度（box-sizing: border-box）
                 e.target.style.height = 'auto';
-                const newHeight = Math.min(e.target.scrollHeight, 200);
+                // scrollHeight 含 padding 但不含 border；border-box 下 height 含 padding+border，
+                // 补上 border 高度，避免每次敲字产生 2px 的滚动抖动。
+                const borderHeight = e.target.offsetHeight - e.target.clientHeight;
+                const newHeight = Math.min(e.target.scrollHeight + borderHeight, 200);
                 e.target.style.height = newHeight + 'px';
             });
 
@@ -1349,9 +1948,15 @@ export function getChatWebviewContent(config: ChatConfig, webview: vscode.Webvie
                     '    👋 Welcome to VSCode Ollama!',
                     '  </h2>',
                     '  <p class="welcome-text">',
-                    '    <a href="https://github.com/warm3snow/vscode-ollama" class="welcome-link">[vscode-ollama]</a> is a VS Code extension based on local Ollama service, supporting model configuration, web search, and more. Star the GitHub repo to support ongoing development!',
-                    '    <br><br>',
+                    '    <a href="https://github.com/warm3snow/vscode-ollama" class="welcome-link">[vscode-ollama]</a> is a VS Code extension powered by local Ollama — chat with models or let them code for you, all running privately on your machine.',
+                    '  </p>',
+                    '  <ul class="welcome-tips">',
+                    '    <li>Agent mode needs a model with <strong>tool calling</strong> support (e.g. llama3.1, qwen3).</li>',
+                    '  </ul>',
+                    '  <p class="welcome-footer">',
                     '    GitHub: <a href="https://github.com/warm3snow/vscode-ollama" class="welcome-link">https://github.com/warm3snow/vscode-ollama</a>',
+                    '    <br>',
+                    '    Star the repo to support ongoing development!',
                     '  </p>',
                     '</div>'
                 ].join('');
@@ -1362,10 +1967,7 @@ export function getChatWebviewContent(config: ChatConfig, webview: vscode.Webvie
             window.addEventListener('message', event => {
                 const message = event.data;
                 if (message.command === 'resetChat') {
-                    const streamingMessages = document.querySelectorAll('.message.assistant-message.streaming');
-                    streamingMessages.forEach(msg => {
-                        msg.classList.remove('streaming');
-                    });
+                    resetChatView();
                 } else if (message.command === 'streamMessage') {
 
                     if (message.newMessage) {
@@ -1406,25 +2008,33 @@ export function getChatWebviewContent(config: ChatConfig, webview: vscode.Webvie
                         return;
                     }
                     const ev = message.event;
-                    if (ev.type === 'thinking') {
-                        statusEl.textContent = '🤔 思考中...';
+                    if (ev.type === 'thinking_start') {
+                        upsertThinkingCard();
+                    } else if (ev.type === 'thinking_delta') {
+                        appendThinkingDelta(ev.thinkingDelta);
+                    } else if (ev.type === 'thinking_end') {
+                        endThinkingCard(ev.duration);
+                    } else if (ev.type === 'tool_call') {
+                        statusEl.textContent = '🔧 ' + (ev.toolName || 'tool');
                         statusEl.style.display = 'block';
-                    } else                     if (ev.type === 'tool_call') {
-                        statusEl.textContent = '🔧 调用工具: ' + ev.toolName + '\\n' + (ev.args || '');
-                        statusEl.style.display = 'block';
+                        upsertToolCard(ev.toolCallId, ev.toolName, ev.args);
                     } else if (ev.type === 'tool_result') {
-                        statusEl.textContent = '✅ 工具完成: ' + ev.toolName + '\\n' + (ev.result || '');
+                        statusEl.textContent = '✅ ' + (ev.toolName || 'tool');
                         statusEl.style.display = 'block';
+                        completeToolCard(ev.toolCallId, ev.toolName, ev.result, ev.isError, ev.duration);
                     } else if (ev.type === 'done') {
                         statusEl.style.display = 'none';
+                    } else if (ev.type === 'usage') {
+                        appendUsageFooter(ev.usage);
                     } else if (ev.type === 'error') {
-                        statusEl.textContent = '⚠️ ' + (ev.message || 'Agent 出错');
+                        statusEl.textContent = '⚠️ ' + (ev.message || 'Agent error');
                         statusEl.style.display = 'block';
+                        appendErrorActivity(ev.message);
                     }
                 } else if (message.command === 'confirmAction') {
                     pendingConfirmRequestId = message.request.requestId;
                     const isPlan = message.request.kind === 'plan';
-                    document.getElementById('confirm-title').textContent = isPlan ? '📋 Agent 提议实施计划' : '🧩 Agent 请求执行操作';
+                    document.getElementById('confirm-title').textContent = isPlan ? '📋 Agent proposes an implementation plan' : '🧩 Agent requests to perform an operation';
                     document.getElementById('confirm-tool').textContent = isPlan ? 'Implementation Plan' : message.request.toolName;
                     document.getElementById('confirm-args').textContent = message.request.args || '{}';
                     document.getElementById('confirm-dialog').style.display = 'flex';
